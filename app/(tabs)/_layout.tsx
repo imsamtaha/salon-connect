@@ -14,5 +14,6 @@ export default function TabLayout() {
     <Tabs.Screen name="bookings" options={{ title: "مواعيدي", tabBarIcon: ({ color }) => <IconSymbol size={23} name="calendar" color={color} /> }} />
     <Tabs.Screen name="messages" options={{ title: "المحادثات", tabBarIcon: ({ color }) => <IconSymbol size={23} name="message" color={color} /> }} />
     <Tabs.Screen name="profile" options={{ title: "حسابي", tabBarIcon: ({ color }) => <IconSymbol size={23} name="person" color={color} /> }} />
+    <Tabs.Screen name="admin" options={{ title: "إدارة المركز", tabBarIcon: ({ color }) => <IconSymbol size={23} name="person" color={color} /> }} />
   </Tabs>;
 }
