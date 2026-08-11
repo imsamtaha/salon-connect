@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { processDueTelegramReminders } from "../reminders";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -60,6 +61,16 @@ async function startServer() {
 
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, timestamp: Date.now() });
+  });
+
+  app.post("/api/scheduled/telegram-reminders", async (_req, res) => {
+    try {
+      const result = await processDueTelegramReminders();
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      console.error("[telegram-reminders] failed", error);
+      res.status(500).json({ ok: false, error: "reminder_processing_failed" });
+    }
   });
 
   app.use(

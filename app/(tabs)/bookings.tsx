@@ -20,15 +20,16 @@ export default function BookingsScreen() {
         salonName: "دار المقص",
         serviceName: "قص وتصفيف",
         appointmentAt: "الخميس 14 أغسطس · 6:30 م",
+        appointmentAtISO: "2026-08-14T15:30:00.000Z",
         staffName: "سارة",
       });
       setStatus("approved");
       if (result.notification.delivered) {
-        Alert.alert("تمت الموافقة", "تم إرسال إشعار Telegram للعميلة فوراً.");
+        Alert.alert("تمت الموافقة", "تم إرسال إشعار Telegram للعميلة فوراً وجدولة تذكير قبل 24 ساعة من الموعد.");
       } else if (result.notification.duplicate) {
         Alert.alert("تمت الموافقة مسبقاً", "تم منع إرسال إشعار Telegram مكرر.");
       } else {
-        Alert.alert("تمت الموافقة", "تغيرت الحالة، لكن Telegram غير مهيأ لهذا العميل بعد.");
+        Alert.alert("تمت الموافقة", "تغيرت الحالة، وستُرسل رسالة تذكير قبل 24 ساعة بعد إكمال إعداد Telegram لهذا العميل.");
       }
     } catch {
       Alert.alert("تعذر الإرسال", "تمت محاولة الموافقة، لكن تعذر الوصول إلى خدمة Telegram. حاول مرة أخرى.");
