@@ -3,7 +3,8 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { sendBookingApprovalNotification } from "./telegram";
-import { ensureReminderHeartbeat, getReminderState, registerApprovedBooking } from "./reminders";
+import { getReminderState } from "./reminders";
+import { runApprovedAppointmentAutomation } from "./automation";
 
 export const appRouter = router({
   system: systemRouter,
@@ -18,13 +19,19 @@ export const appRouter = router({
   bookings: router({
     approve: publicProcedure
       .input(z.object({
-        bookingId: z.string().min(1), chatId: z.string().optional(), customerName: z.string().min(1), salonName: z.string().min(1), serviceName: z.string().min(1), appointmentAt: z.string().min(1), appointmentAtISO: z.string().datetime(), staffName: z.string().min(1),
+        bookingId: z.string().min(1), customerUserId: z.number().int().positive().optional(), chatId: z.string().optional(), customerName: z.string().min(1), salonName: z.string().min(1), serviceName: z.string().min(1), appointmentAt: z.string().min(1), appointmentAtISO: z.string().datetime(), staffName: z.string().min(1),
       }))
       .mutation(async ({ input }) => {
         const notification = await sendBookingApprovalNotification(input);
-        registerApprovedBooking({ ...input, appointmentAtLabel: input.appointmentAt });
-        const reminderScheduler = ensureReminderHeartbeat().then(() => "scheduled" as const).catch(() => "scheduler_unavailable" as const);
-        return { bookingId: input.bookingId, status: "approved" as const, notification, reminderScheduler: await reminderScheduler };
+        const automation = await runApprovedAppointmentAutomation(input);
+        return {
+          bookingId: input.bookingId,
+          status: "approved" as const,
+          notification,
+          reminderScheduler: automation.reminderScheduler,
+          customerRecordUpdated: automation.customerRecordUpdated,
+          reminderAtISO: automation.snapshot.reminderAtISO,
+        };
       }),
     reminderState: publicProcedure.query(() => getReminderState()),
   }),

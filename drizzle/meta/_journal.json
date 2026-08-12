@@ -15,6 +15,13 @@
       "when": 1786492533136,
       "tag": "0001_first_peter_quill",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1786493743491,
+      "tag": "0002_gorgeous_kronos",
+      "breakpoints": true
     }
   ]
 }

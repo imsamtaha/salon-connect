@@ -1,8 +1,13 @@
 import { createHeartbeatJob } from "./_core/heartbeat";
+import { eq } from "drizzle-orm";
+
+import { customerProfiles } from "../drizzle/schema";
 import { sendBookingReminderNotification } from "./telegram";
+import { getDb } from "./db";
 
 type ApprovedBooking = {
   bookingId: string;
+  customerUserId?: number;
   chatId?: string;
   customerName: string;
   salonName: string;
@@ -46,6 +51,12 @@ export async function processDueTelegramReminders(now = Date.now()) {
       const result = await sendBookingReminderNotification(booking);
       if (result.delivered || result.duplicate) {
         booking.reminderSent = true;
+        if (booking.customerUserId) {
+          const db = await getDb();
+          if (db) {
+            await db.update(customerProfiles).set({ reminderStatus: "sent", updatedAt: new Date() }).where(eq(customerProfiles.userId, booking.customerUserId));
+          }
+        }
         due.push(booking.bookingId);
       }
     }

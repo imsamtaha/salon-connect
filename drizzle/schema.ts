@@ -19,6 +19,11 @@ export const customerProfiles = mysqlTable("customer_profiles", {
   telegramChatId: varchar("telegramChatId", { length: 128 }),
   preferredStaff: varchar("preferredStaff", { length: 128 }),
   notes: text("notes"),
+  lastAppointmentId: varchar("lastAppointmentId", { length: 128 }),
+  lastAppointmentStatus: mysqlEnum("lastAppointmentStatus", ["pending", "approved", "rejected", "rescheduled", "cancelled"]),
+  lastAppointmentAt: timestamp("lastAppointmentAt"),
+  lastReminderAt: timestamp("lastReminderAt"),
+  reminderStatus: mysqlEnum("reminderStatus", ["not_scheduled", "scheduled", "sent", "cancelled", "failed"]).default("not_scheduled").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

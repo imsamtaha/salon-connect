@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { I18nManager, Platform } from "react-native";
 
 export type Language = "ar" | "en";
 const LANGUAGE_KEY = "beauty-connect-language";
@@ -66,6 +67,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       if (stored === "ar" || stored === "en") setLanguageState(stored);
     });
   }, []);
+
+  useEffect(() => {
+    const isRTL = language === "ar";
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.documentElement.dir = isRTL ? "rtl" : "ltr";
+      document.documentElement.lang = language;
+      document.body.dir = isRTL ? "rtl" : "ltr";
+    } else {
+      I18nManager.allowRTL(isRTL);
+      I18nManager.forceRTL(isRTL);
+    }
+  }, [language]);
 
   const setLanguage = useCallback((next: Language) => {
     setLanguageState(next);
