@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { ShimmerBlock } from "@/components/shimmer-block";
 import { useColors } from "@/hooks/use-colors";
 import { useThemeContext } from "@/lib/theme-provider";
 
@@ -29,7 +30,7 @@ export default function MessagesScreen() {
 }
 
 function MessageListSkeleton({ base, highlight }: { base: string; highlight: string }) {
-  return <View style={styles.skeletonList}>{[0, 1].map((index) => <View key={index} style={[styles.skeletonThread, { borderColor: base }]}><View style={[styles.skeletonAvatar, { backgroundColor: base }]} /><View style={styles.skeletonCopy}><View style={[styles.skeletonLine, styles.skeletonLinePrimary, { backgroundColor: highlight }]} /><View style={[styles.skeletonLine, styles.skeletonLineSecondary, { backgroundColor: base }]} /></View></View>)}</View>;
+  return <View style={styles.skeletonList} accessibilityLabel="Loading conversations" accessibilityState={{ busy: true }}>{[0, 1].map((index) => <View key={index} style={[styles.skeletonThread, { borderColor: base }]}><ShimmerBlock style={styles.skeletonAvatar} baseColor={base} highlightColor={highlight} /><View style={styles.skeletonCopy}><ShimmerBlock style={[styles.skeletonLine, styles.skeletonLinePrimary]} baseColor={base} highlightColor={highlight} /><ShimmerBlock style={[styles.skeletonLine, styles.skeletonLineSecondary]} baseColor={base} highlightColor={highlight} /></View></View>)}</View>;
 }
 
 const styles = StyleSheet.create({

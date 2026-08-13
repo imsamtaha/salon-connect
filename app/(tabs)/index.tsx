@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
+import { ShimmerBlock } from "@/components/shimmer-block";
 import { useLanguage } from "@/lib/i18n";
 import { useThemeContext } from "@/lib/theme-provider";
 import { trpc } from "@/lib/trpc";
@@ -37,13 +38,14 @@ function Metric({ value, label, detail, tone = "muted", isLight = false }: Metri
 
 function MetricSkeleton({ isLight }: { isLight: boolean }) {
   const fill = isLight ? "#E9E2DB" : "#2A2A2A";
-  const softFill = isLight ? "#F2ECE7" : "#202020";
-  return <View style={[styles.metric, { backgroundColor: isLight ? "#FFFFFF" : "#151515", borderColor: isLight ? "#E7DED5" : "#282828" }]} accessibilityLabel="Loading live metric"><View style={[liveStyles.skeletonLine, liveStyles.skeletonValue, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonLabel, { backgroundColor: softFill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonDetail, { backgroundColor: softFill }]} /></View>;
+  const highlight = isLight ? "#F8F3EE" : "#3A3A3A";
+  return <View style={[styles.metric, { backgroundColor: isLight ? "#FFFFFF" : "#151515", borderColor: isLight ? "#E7DED5" : "#282828" }]} accessibilityLabel="Loading live metric" accessibilityState={{ busy: true }}><ShimmerBlock style={[liveStyles.skeletonLine, liveStyles.skeletonValue]} baseColor={fill} highlightColor={highlight} /><ShimmerBlock style={[liveStyles.skeletonLine, liveStyles.skeletonLabel]} baseColor={fill} highlightColor={highlight} /><ShimmerBlock style={[liveStyles.skeletonLine, liveStyles.skeletonDetail]} baseColor={fill} highlightColor={highlight} /></View>;
 }
 
 function CrmSkeleton({ isLight }: { isLight: boolean }) {
   const fill = isLight ? "#EEE7E1" : "#2B2B2B";
-  return <View style={liveStyles.crmLoading} accessibilityLabel="Loading live CRM records">{Array.from({ length: 4 }, (_, index) => <View key={index} style={[liveStyles.crmLoadingRow, { borderBottomColor: isLight ? "#EEE6E0" : "#242424" }]}><View style={[liveStyles.skeletonCircle, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonClient, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonService, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonTime, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonStatus, { backgroundColor: fill }]} /></View>)}</View>;
+  const highlight = isLight ? "#FAF5F0" : "#3A3A3A";
+  return <View style={liveStyles.crmLoading} accessibilityLabel="Loading live CRM records" accessibilityState={{ busy: true }}>{Array.from({ length: 4 }, (_, index) => <View key={index} style={[liveStyles.crmLoadingRow, { borderBottomColor: isLight ? "#EEE6E0" : "#242424" }]}><ShimmerBlock style={liveStyles.skeletonCircle} baseColor={fill} highlightColor={highlight} /><ShimmerBlock style={[liveStyles.skeletonLine, liveStyles.skeletonClient]} baseColor={fill} highlightColor={highlight} /><ShimmerBlock style={[liveStyles.skeletonLine, liveStyles.skeletonService]} baseColor={fill} highlightColor={highlight} /><ShimmerBlock style={[liveStyles.skeletonLine, liveStyles.skeletonTime]} baseColor={fill} highlightColor={highlight} /><ShimmerBlock style={[liveStyles.skeletonLine, liveStyles.skeletonStatus]} baseColor={fill} highlightColor={highlight} /></View>)}</View>;
 }
 
 function CrmEmpty({ title, body, actionLabel, onAction, isLight }: { title: string; body: string; actionLabel?: string; onAction?: () => void; isLight: boolean }) {

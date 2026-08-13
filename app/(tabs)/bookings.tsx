@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
+import { ShimmerBlock } from "@/components/shimmer-block";
 import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { useThemeContext } from "@/lib/theme-provider";
@@ -97,7 +98,7 @@ function Section({ title, children, colors }: { title: string; children: React.R
 }
 
 function BookingActivitySkeleton({ base, highlight }: { base: string; highlight: string }) {
-  return <View style={styles.skeletonActivity}><View style={[styles.skeletonDot, { backgroundColor: base }]} /><View style={styles.skeletonCopy}><View style={[styles.skeletonLine, styles.skeletonLinePrimary, { backgroundColor: highlight }]} /><View style={[styles.skeletonLine, styles.skeletonLineSecondary, { backgroundColor: base }]} /></View></View>;
+  return <View style={styles.skeletonActivity} accessibilityLabel="Loading booking status" accessibilityState={{ busy: true }}><ShimmerBlock style={styles.skeletonDot} baseColor={base} highlightColor={highlight} /><View style={styles.skeletonCopy}><ShimmerBlock style={[styles.skeletonLine, styles.skeletonLinePrimary]} baseColor={base} highlightColor={highlight} /><ShimmerBlock style={[styles.skeletonLine, styles.skeletonLineSecondary]} baseColor={base} highlightColor={highlight} /></View></View>;
 }
 
 const styles = StyleSheet.create({
