@@ -4,24 +4,58 @@ import { router } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useLanguage } from "@/lib/i18n";
 import { useThemeContext } from "@/lib/theme-provider";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/hooks/use-auth";
 
-type MetricProps = { value: string; label: string; detail: string; tone?: "orange" | "mint" | "muted" };
+type MetricProps = { value: string; label: string; detail: string; tone?: "orange" | "mint" | "muted"; isLight?: boolean };
 
-const appointmentRows = [
-  { client: "Maya K.", service: "Balayage + Gloss", time: "10:30 AM", status: "Confirmed", source: "WhatsApp", action: "View" },
-  { client: "Rana Haddad", service: "Hydra Facial", time: "12:15 PM", status: "Note added", source: "Telegram", action: "Review" },
-  { client: "Sarah N.", service: "Lash Lift", time: "2:00 PM", status: "Pending", source: "Website", action: "Approve" },
-  { client: "Lina Saad", service: "Blow dry", time: "4:30 PM", status: "Confirmed", source: "WhatsApp", action: "View" },
-];
+const liveStyles = StyleSheet.create({
+  skeletonLine: { borderRadius: 999 },
+  skeletonValue: { width: "34%", height: 30 },
+  skeletonLabel: { width: "56%", height: 11, marginTop: 4 },
+  skeletonDetail: { width: "76%", height: 9, marginTop: 4 },
+  crmLoading: { minHeight: 250 },
+  crmLoadingRow: { minHeight: 61, flexDirection: "row", alignItems: "center", gap: 14, borderBottomWidth: 1 },
+  skeletonCircle: { width: 29, height: 29, borderRadius: 10 },
+  skeletonClient: { width: 118, height: 12 },
+  skeletonService: { width: 128, height: 11, marginLeft: 8 },
+  skeletonTime: { width: 54, height: 11, marginLeft: 8 },
+  skeletonStatus: { width: 75, height: 20, borderRadius: 999, marginLeft: 8 },
+  crmEmpty: { minHeight: 230, borderWidth: 1, borderStyle: "dashed", borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 36, paddingVertical: 28 },
+  emptyIcon: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", marginBottom: 11 },
+  emptyIconText: { color: "#FF7A00", fontSize: 23, fontWeight: "900" },
+  emptyTitle: { fontSize: 14, fontWeight: "900", textAlign: "center" },
+  emptyBody: { fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 6, maxWidth: 330 },
+  emptyAction: { backgroundColor: "#FF7A00", borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9, marginTop: 14 },
+  emptyActionText: { color: "#1C130C", fontSize: 10, fontWeight: "900" },
+});
 
-function Metric({ value, label, detail, tone = "muted" }: MetricProps) {
-  return <View style={[styles.metric, tone === "orange" && styles.metricOrange, tone === "mint" && styles.metricMint]}><Text style={styles.metricValue}>{value}</Text><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricDetail}>{detail}</Text></View>;
+function Metric({ value, label, detail, tone = "muted", isLight = false }: MetricProps) {
+  const lightSurface = isLight ? { backgroundColor: tone === "orange" ? "#FFF5EB" : tone === "mint" ? "#ECF8F2" : "#FFFFFF", borderColor: tone === "orange" ? "#F1C79F" : tone === "mint" ? "#B7DEC9" : "#E7DED5" } : undefined;
+  return <View style={[styles.metric, tone === "orange" && styles.metricOrange, tone === "mint" && styles.metricMint, lightSurface]}><Text style={[styles.metricValue, isLight && { color: "#201A15" }]}>{value}</Text><Text style={[styles.metricLabel, isLight && { color: "#403932" }]}>{label}</Text><Text style={[styles.metricDetail, isLight && { color: "#7B7167" }]}>{detail}</Text></View>;
+}
+
+function MetricSkeleton({ isLight }: { isLight: boolean }) {
+  const fill = isLight ? "#E9E2DB" : "#2A2A2A";
+  const softFill = isLight ? "#F2ECE7" : "#202020";
+  return <View style={[styles.metric, { backgroundColor: isLight ? "#FFFFFF" : "#151515", borderColor: isLight ? "#E7DED5" : "#282828" }]} accessibilityLabel="Loading live metric"><View style={[liveStyles.skeletonLine, liveStyles.skeletonValue, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonLabel, { backgroundColor: softFill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonDetail, { backgroundColor: softFill }]} /></View>;
+}
+
+function CrmSkeleton({ isLight }: { isLight: boolean }) {
+  const fill = isLight ? "#EEE7E1" : "#2B2B2B";
+  return <View style={liveStyles.crmLoading} accessibilityLabel="Loading live CRM records">{Array.from({ length: 4 }, (_, index) => <View key={index} style={[liveStyles.crmLoadingRow, { borderBottomColor: isLight ? "#EEE6E0" : "#242424" }]}><View style={[liveStyles.skeletonCircle, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonClient, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonService, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonTime, { backgroundColor: fill }]} /><View style={[liveStyles.skeletonLine, liveStyles.skeletonStatus, { backgroundColor: fill }]} /></View>)}</View>;
+}
+
+function CrmEmpty({ title, body, actionLabel, onAction, isLight }: { title: string; body: string; actionLabel?: string; onAction?: () => void; isLight: boolean }) {
+  return <View style={[liveStyles.crmEmpty, { borderColor: isLight ? "#E7DED5" : "#303030", backgroundColor: isLight ? "#FCFAF8" : "#1B1B1B" }]}><View style={[liveStyles.emptyIcon, { backgroundColor: isLight ? "#FFF0E2" : "#332010" }]}><Text style={liveStyles.emptyIconText}>⌁</Text></View><Text style={[liveStyles.emptyTitle, { color: isLight ? "#302821" : "#F3F3F3" }]}>{title}</Text><Text style={[liveStyles.emptyBody, { color: isLight ? "#756B63" : "#A8A8A8" }]}>{body}</Text>{actionLabel && onAction ? <Pressable onPress={onAction} style={liveStyles.emptyAction}><Text style={liveStyles.emptyActionText}>{actionLabel}</Text></Pressable> : null}</View>;
 }
 
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const { language, setLanguage } = useLanguage();
   const { colorScheme, setColorScheme } = useThemeContext();
+  const { isAuthenticated, loading: isAuthLoading } = useAuth();
+  const dashboardQuery = trpc.dashboard.overview.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 30000, retry: false });
   const [activeConversation, setActiveConversation] = useState<"maya" | "sarah">("maya");
   const isDesktop = width >= 940;
   const isWide = width >= 1180;
@@ -29,6 +63,9 @@ export default function HomeScreen() {
   const palette = isLight
     ? { page: "#FBF8F5", surface: "#FFFFFF", border: "#E7DED5", title: "#1D1712", body: "#655E57", subtle: "#9A9086" }
     : { page: "#090909", surface: "#151515", border: "#282828", title: "#FFF", body: "#B8B8B8", subtle: "#8B8B8B" };
+  const dashboard = dashboardQuery.data;
+  const metrics = dashboard?.metrics;
+  const isLiveLoading = isAuthLoading || (isAuthenticated && dashboardQuery.isLoading);
   const copy = language === "ar" ? {
     greeting: "صباح الخير، نادين.",
     subtitle: "كل ما يحتاجه مركزك لإدارة الحجوزات والعملاء والتواصل في مكان واحد.",
@@ -50,6 +87,17 @@ export default function HomeScreen() {
     status: "الحالة",
     source: "القناة",
     next: "الإجراء",
+    loading: "جارٍ تحميل بيانات المركز…",
+    signInTitle: "سجّلي الدخول لعرض السجل الحي",
+    signInBody: "تحتاج لوحة CRM إلى حساب المديرة لعرض حجوزات العميلات بشكل آمن.",
+    signInAction: "تسجيل الدخول",
+    emptyTitle: "لا توجد حجوزات محفوظة بعد",
+    emptyBody: "عند اعتماد أول موعد، سيظهر هنا مع حالة التذكير والملاحظة.",
+    unavailableTitle: "مصدر البيانات غير متصل",
+    unavailableBody: "تحققي من اتصال قاعدة البيانات ثم أعيدي المحاولة.",
+    retry: "إعادة المحاولة",
+    notRecorded: "غير مسجلة",
+    priceNotSaved: "لم يتم حفظ أسعار الخدمات بعد",
   } : {
     greeting: "Good morning, Nadine.",
     subtitle: "Your salon’s bookings, clients, and conversations — coordinated in one calm workspace.",
@@ -71,6 +119,17 @@ export default function HomeScreen() {
     status: "Status",
     source: "Source",
     next: "Next action",
+    loading: "Loading live salon data…",
+    signInTitle: "Sign in to view live CRM",
+    signInBody: "The manager account is required to show client bookings securely.",
+    signInAction: "Sign in",
+    emptyTitle: "No saved bookings yet",
+    emptyBody: "Once the first appointment is approved, it will appear here with its reminder and note status.",
+    unavailableTitle: "Data source unavailable",
+    unavailableBody: "Check the database connection, then try again.",
+    retry: "Try again",
+    notRecorded: "Not recorded",
+    priceNotSaved: "Service pricing has not been saved yet",
   };
 
   const conversation = activeConversation === "maya"
@@ -101,10 +160,7 @@ export default function HomeScreen() {
 
         <View style={styles.sectionHeading}><Text style={styles.sectionKicker}>{copy.overview.toUpperCase()}</Text><Text style={styles.sectionMeta}>Tuesday, 13 August</Text></View>
         <View style={[styles.metricsGrid, !isDesktop && styles.metricsGridCompact]}>
-          <Metric value="12" label={copy.today} detail="3 in the next 90 min" />
-          <Metric value="8" label={copy.confirmed} detail="+2 since this morning" tone="mint" />
-          <Metric value="3" label={copy.pending} detail="Needs your review" tone="orange" />
-          <Metric value="$1,240" label={copy.revenue} detail="Based on booked services" />
+          {isLiveLoading ? <><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /></> : <><Metric isLight={isLight} value={metrics ? String(metrics.appointmentsToday) : "—"} label={copy.today} detail={metrics ? `${metrics.confirmed + metrics.pending} tracked today` : copy.loading} /><Metric isLight={isLight} value={metrics ? String(metrics.confirmed) : "—"} label={copy.confirmed} detail={metrics ? `${metrics.unpricedAppointments} need pricing` : copy.loading} tone="mint" /><Metric isLight={isLight} value={metrics ? String(metrics.pending) : "—"} label={copy.pending} detail={metrics?.pending ? "Needs your review" : copy.loading} tone="orange" /><Metric isLight={isLight} value={metrics?.estimatedRevenue === null || !metrics ? "—" : `$${metrics.estimatedRevenue}`} label={copy.revenue} detail={metrics ? copy.priceNotSaved : copy.loading} /></>}
         </View>
 
         <View style={[styles.mainGrid, { flexDirection: isWide ? (language === "ar" ? "row-reverse" : "row") : "column" }]}>
@@ -112,7 +168,7 @@ export default function HomeScreen() {
             <View style={[styles.panelHeader, { flexDirection: language === "ar" ? "row-reverse" : "row" }]}><View><Text style={[styles.panelTitle, { textAlign: language === "ar" ? "right" : "left" }]}>{copy.crm}</Text><Text style={[styles.panelSub, { textAlign: language === "ar" ? "right" : "left" }]}>{copy.crmNote}</Text></View><Pressable onPress={() => router.push("/admin")} style={styles.subtleButton}><Text style={styles.subtleButtonText}>Open dashboard</Text></Pressable></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tableScroll}><View style={styles.crmTable}>
               <View style={styles.tableHeader}><Text style={[styles.tableHead, styles.clientCol]}>{copy.client}</Text><Text style={[styles.tableHead, styles.serviceCol]}>{copy.service}</Text><Text style={[styles.tableHead, styles.timeCol]}>{copy.time}</Text><Text style={[styles.tableHead, styles.statusCol]}>{copy.status}</Text><Text style={[styles.tableHead, styles.sourceCol]}>{copy.source}</Text><Text style={[styles.tableHead, styles.actionCol]}>{copy.next}</Text></View>
-              {appointmentRows.map((row) => <View key={row.client} style={styles.tableRow}><View style={styles.clientCol}><View style={styles.clientInitial}><Text style={styles.clientInitialText}>{row.client.slice(0, 1)}</Text></View><View><Text style={styles.clientName}>{row.client}</Text>{row.status === "Note added" && <View style={styles.noteBadge}><Text style={styles.noteBadgeText}>{copy.note}</Text></View>}</View></View><Text style={[styles.tableText, styles.serviceCol]}>{row.service}</Text><Text style={[styles.tableText, styles.timeCol]}>{row.time}</Text><View style={styles.statusCol}><View style={[styles.statusBadge, row.status === "Pending" && styles.statusPending, row.status === "Note added" && styles.statusNote]}><Text style={[styles.statusText, row.status === "Pending" && styles.statusTextPending]}>{row.status}</Text></View></View><Text style={[styles.tableText, styles.sourceCol]}>{row.source}</Text><Pressable style={styles.tableAction}><Text style={styles.tableActionText}>{row.action}</Text></Pressable></View>)}
+              {isLiveLoading ? <CrmSkeleton isLight={isLight} /> : !isAuthenticated ? <CrmEmpty isLight={isLight} title={copy.signInTitle} body={copy.signInBody} actionLabel={copy.signInAction} onAction={() => router.push("/login")} /> : dashboardQuery.isError || !dashboard?.databaseAvailable ? <CrmEmpty isLight={isLight} title={copy.unavailableTitle} body={copy.unavailableBody} actionLabel={copy.retry} onAction={() => dashboardQuery.refetch()} /> : dashboard.rows.length === 0 ? <CrmEmpty isLight={isLight} title={copy.emptyTitle} body={copy.emptyBody} /> : dashboard.rows.map((row) => <View key={row.id} style={styles.tableRow}><View style={styles.clientCol}><View style={styles.clientInitial}><Text style={styles.clientInitialText}>{row.client.slice(0, 1)}</Text></View><View><Text style={styles.clientName}>{row.client}</Text>{row.hasCustomerNote && <View style={styles.noteBadge}><Text style={styles.noteBadgeText}>{copy.note}</Text></View>}</View></View><Text style={[styles.tableText, styles.serviceCol]}>{row.service ?? copy.notRecorded}</Text><Text style={[styles.tableText, styles.timeCol]}>{row.appointmentAtISO ? new Date(row.appointmentAtISO).toLocaleTimeString(language === "ar" ? "ar-LB" : "en-US", { hour: "numeric", minute: "2-digit" }) : "—"}</Text><View style={styles.statusCol}><View style={[styles.statusBadge, row.status === "pending" && styles.statusPending]}><Text style={[styles.statusText, row.status === "pending" && styles.statusTextPending]}>{row.status}</Text></View></View><Text style={[styles.tableText, styles.sourceCol]}>{row.contactChannel}</Text><Pressable onPress={() => router.push("/admin")} style={styles.tableAction}><Text style={styles.tableActionText}>{row.nextAction}</Text></Pressable></View>)}
             </View></ScrollView>
           </View>
           <View style={styles.insightsStack}>

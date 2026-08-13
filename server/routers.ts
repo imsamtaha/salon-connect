@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router } from "./_core/trpc";
+import { getManagerDashboardSnapshot } from "./dashboard";
 import { sendBookingApprovalNotification } from "./telegram";
 import { getReminderState } from "./reminders";
 import { runApprovedAppointmentAutomation } from "./automation";
@@ -15,6 +16,9 @@ export const appRouter = router({
       ctx.res.clearCookie("manus_session", { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+  }),
+  dashboard: router({
+    overview: adminProcedure.query(() => getManagerDashboardSnapshot()),
   }),
   bookings: router({
     approve: publicProcedure
