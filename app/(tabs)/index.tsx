@@ -23,11 +23,14 @@ const liveStyles = StyleSheet.create({
   skeletonTime: { width: 54, height: 11, marginLeft: 8 },
   skeletonStatus: { width: 75, height: 20, borderRadius: 999, marginLeft: 8 },
   crmEmpty: { minHeight: 230, borderWidth: 1, borderStyle: "dashed", borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 36, paddingVertical: 28 },
+  requestError: { borderStyle: "solid" },
   emptyIcon: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", marginBottom: 11 },
   emptyIconText: { color: "#FF7A00", fontSize: 23, fontWeight: "900" },
   emptyTitle: { fontSize: 14, fontWeight: "900", textAlign: "center" },
   emptyBody: { fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 6, maxWidth: 330 },
   emptyAction: { backgroundColor: "#FF7A00", borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9, marginTop: 14 },
+  retryAction: { minWidth: 110, alignItems: "center" },
+  retryActionDisabled: { opacity: 0.62 },
   emptyActionText: { color: "#1C130C", fontSize: 10, fontWeight: "900" },
 });
 
@@ -52,6 +55,10 @@ function CrmEmpty({ title, body, actionLabel, onAction, isLight }: { title: stri
   return <View style={[liveStyles.crmEmpty, { borderColor: isLight ? "#E7DED5" : "#303030", backgroundColor: isLight ? "#FCFAF8" : "#1B1B1B" }]}><View style={[liveStyles.emptyIcon, { backgroundColor: isLight ? "#FFF0E2" : "#332010" }]}><Text style={liveStyles.emptyIconText}>⌁</Text></View><Text style={[liveStyles.emptyTitle, { color: isLight ? "#302821" : "#F3F3F3" }]}>{title}</Text><Text style={[liveStyles.emptyBody, { color: isLight ? "#756B63" : "#A8A8A8" }]}>{body}</Text>{actionLabel && onAction ? <Pressable onPress={onAction} style={liveStyles.emptyAction}><Text style={liveStyles.emptyActionText}>{actionLabel}</Text></Pressable> : null}</View>;
 }
 
+function CrmRequestError({ title, body, retryLabel, retryingLabel, isRetrying, onRetry, isLight }: { title: string; body: string; retryLabel: string; retryingLabel: string; isRetrying: boolean; onRetry: () => void; isLight: boolean }) {
+  return <View accessibilityRole="alert" style={[liveStyles.crmEmpty, liveStyles.requestError, { borderColor: isLight ? "#E7C3B8" : "#5A2A25", backgroundColor: isLight ? "#FFF9F6" : "#211513" }]}><View style={[liveStyles.emptyIcon, { backgroundColor: isLight ? "#FDE9E2" : "#3B1D19" }]}><Text style={[liveStyles.emptyIconText, { color: isLight ? "#B33A25" : "#FF9D87" }]}>!</Text></View><Text style={[liveStyles.emptyTitle, { color: isLight ? "#4A1E17" : "#FFD8CF" }]}>{title}</Text><Text style={[liveStyles.emptyBody, { color: isLight ? "#805C55" : "#CBA9A2" }]}>{body}</Text><Pressable accessibilityRole="button" accessibilityState={{ busy: isRetrying, disabled: isRetrying }} disabled={isRetrying} onPress={onRetry} style={[liveStyles.emptyAction, liveStyles.retryAction, isRetrying && liveStyles.retryActionDisabled]}><Text style={liveStyles.emptyActionText}>{isRetrying ? retryingLabel : retryLabel}</Text></Pressable></View>;
+}
+
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const { language, setLanguage } = useLanguage();
@@ -67,7 +74,9 @@ export default function HomeScreen() {
     : { page: "#090909", surface: "#151515", border: "#282828", title: "#FFF", body: "#B8B8B8", subtle: "#8B8B8B" };
   const dashboard = dashboardQuery.data;
   const metrics = dashboard?.metrics;
+  const crmRows = dashboard?.rows ?? [];
   const isLiveLoading = isAuthLoading || (isAuthenticated && dashboardQuery.isLoading);
+  const hasLiveRequestError = isAuthenticated && (dashboardQuery.isError || !dashboard?.databaseAvailable);
   const copy = language === "ar" ? {
     greeting: "صباح الخير، نادين.",
     subtitle: "كل ما يحتاجه مركزك لإدارة الحجوزات والعملاء والتواصل في مكان واحد.",
@@ -98,6 +107,8 @@ export default function HomeScreen() {
     unavailableTitle: "مصدر البيانات غير متصل",
     unavailableBody: "تحققي من اتصال قاعدة البيانات ثم أعيدي المحاولة.",
     retry: "إعادة المحاولة",
+    retrying: "جارٍ إعادة المحاولة…",
+    metricUnavailable: "تعذر تحديث البيانات الحية",
     notRecorded: "غير مسجلة",
     priceNotSaved: "لم يتم حفظ أسعار الخدمات بعد",
   } : {
@@ -130,6 +141,8 @@ export default function HomeScreen() {
     unavailableTitle: "Data source unavailable",
     unavailableBody: "Check the database connection, then try again.",
     retry: "Try again",
+    retrying: "Retrying…",
+    metricUnavailable: "Live data could not be refreshed",
     notRecorded: "Not recorded",
     priceNotSaved: "Service pricing has not been saved yet",
   };
@@ -162,7 +175,7 @@ export default function HomeScreen() {
 
         <View style={styles.sectionHeading}><Text style={styles.sectionKicker}>{copy.overview.toUpperCase()}</Text><Text style={styles.sectionMeta}>Tuesday, 13 August</Text></View>
         <View style={[styles.metricsGrid, !isDesktop && styles.metricsGridCompact]}>
-          {isLiveLoading ? <><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /></> : <><Metric isLight={isLight} value={metrics ? String(metrics.appointmentsToday) : "—"} label={copy.today} detail={metrics ? `${metrics.confirmed + metrics.pending} tracked today` : copy.loading} /><Metric isLight={isLight} value={metrics ? String(metrics.confirmed) : "—"} label={copy.confirmed} detail={metrics ? `${metrics.unpricedAppointments} need pricing` : copy.loading} tone="mint" /><Metric isLight={isLight} value={metrics ? String(metrics.pending) : "—"} label={copy.pending} detail={metrics?.pending ? "Needs your review" : copy.loading} tone="orange" /><Metric isLight={isLight} value={metrics?.estimatedRevenue === null || !metrics ? "—" : `$${metrics.estimatedRevenue}`} label={copy.revenue} detail={metrics ? copy.priceNotSaved : copy.loading} /></>}
+          {isLiveLoading ? <><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /><MetricSkeleton isLight={isLight} /></> : <><Metric isLight={isLight} value={metrics ? String(metrics.appointmentsToday) : "—"} label={copy.today} detail={metrics ? `${metrics.confirmed + metrics.pending} tracked today` : hasLiveRequestError ? copy.metricUnavailable : copy.loading} /><Metric isLight={isLight} value={metrics ? String(metrics.confirmed) : "—"} label={copy.confirmed} detail={metrics ? `${metrics.unpricedAppointments} need pricing` : hasLiveRequestError ? copy.metricUnavailable : copy.loading} tone="mint" /><Metric isLight={isLight} value={metrics ? String(metrics.pending) : "—"} label={copy.pending} detail={metrics?.pending ? "Needs your review" : hasLiveRequestError ? copy.metricUnavailable : copy.loading} tone="orange" /><Metric isLight={isLight} value={metrics?.estimatedRevenue === null || !metrics ? "—" : `$${metrics.estimatedRevenue}`} label={copy.revenue} detail={metrics ? copy.priceNotSaved : hasLiveRequestError ? copy.metricUnavailable : copy.loading} /></>}
         </View>
 
         <View style={[styles.mainGrid, { flexDirection: isWide ? (language === "ar" ? "row-reverse" : "row") : "column" }]}>
@@ -170,7 +183,7 @@ export default function HomeScreen() {
             <View style={[styles.panelHeader, { flexDirection: language === "ar" ? "row-reverse" : "row" }]}><View><Text style={[styles.panelTitle, { textAlign: language === "ar" ? "right" : "left" }]}>{copy.crm}</Text><Text style={[styles.panelSub, { textAlign: language === "ar" ? "right" : "left" }]}>{copy.crmNote}</Text></View><Pressable onPress={() => router.push("/admin")} style={styles.subtleButton}><Text style={styles.subtleButtonText}>Open dashboard</Text></Pressable></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tableScroll}><View style={styles.crmTable}>
               <View style={styles.tableHeader}><Text style={[styles.tableHead, styles.clientCol]}>{copy.client}</Text><Text style={[styles.tableHead, styles.serviceCol]}>{copy.service}</Text><Text style={[styles.tableHead, styles.timeCol]}>{copy.time}</Text><Text style={[styles.tableHead, styles.statusCol]}>{copy.status}</Text><Text style={[styles.tableHead, styles.sourceCol]}>{copy.source}</Text><Text style={[styles.tableHead, styles.actionCol]}>{copy.next}</Text></View>
-              {isLiveLoading ? <CrmSkeleton isLight={isLight} /> : !isAuthenticated ? <CrmEmpty isLight={isLight} title={copy.signInTitle} body={copy.signInBody} actionLabel={copy.signInAction} onAction={() => router.push("/login")} /> : dashboardQuery.isError || !dashboard?.databaseAvailable ? <CrmEmpty isLight={isLight} title={copy.unavailableTitle} body={copy.unavailableBody} actionLabel={copy.retry} onAction={() => dashboardQuery.refetch()} /> : dashboard.rows.length === 0 ? <CrmEmpty isLight={isLight} title={copy.emptyTitle} body={copy.emptyBody} /> : dashboard.rows.map((row) => <View key={row.id} style={styles.tableRow}><View style={styles.clientCol}><View style={styles.clientInitial}><Text style={styles.clientInitialText}>{row.client.slice(0, 1)}</Text></View><View><Text style={styles.clientName}>{row.client}</Text>{row.hasCustomerNote && <View style={styles.noteBadge}><Text style={styles.noteBadgeText}>{copy.note}</Text></View>}</View></View><Text style={[styles.tableText, styles.serviceCol]}>{row.service ?? copy.notRecorded}</Text><Text style={[styles.tableText, styles.timeCol]}>{row.appointmentAtISO ? new Date(row.appointmentAtISO).toLocaleTimeString(language === "ar" ? "ar-LB" : "en-US", { hour: "numeric", minute: "2-digit" }) : "—"}</Text><View style={styles.statusCol}><View style={[styles.statusBadge, row.status === "pending" && styles.statusPending]}><Text style={[styles.statusText, row.status === "pending" && styles.statusTextPending]}>{row.status}</Text></View></View><Text style={[styles.tableText, styles.sourceCol]}>{row.contactChannel}</Text><Pressable onPress={() => router.push("/admin")} style={styles.tableAction}><Text style={styles.tableActionText}>{row.nextAction}</Text></Pressable></View>)}
+              {isLiveLoading ? <CrmSkeleton isLight={isLight} /> : !isAuthenticated ? <CrmEmpty isLight={isLight} title={copy.signInTitle} body={copy.signInBody} actionLabel={copy.signInAction} onAction={() => router.push("/login")} /> : hasLiveRequestError ? <CrmRequestError isLight={isLight} title={copy.unavailableTitle} body={copy.unavailableBody} retryLabel={copy.retry} retryingLabel={copy.retrying} isRetrying={dashboardQuery.isRefetching} onRetry={() => dashboardQuery.refetch()} /> : crmRows.length === 0 ? <CrmEmpty isLight={isLight} title={copy.emptyTitle} body={copy.emptyBody} /> : crmRows.map((row) => <View key={row.id} style={styles.tableRow}><View style={styles.clientCol}><View style={styles.clientInitial}><Text style={styles.clientInitialText}>{row.client.slice(0, 1)}</Text></View><View><Text style={styles.clientName}>{row.client}</Text>{row.hasCustomerNote && <View style={styles.noteBadge}><Text style={styles.noteBadgeText}>{copy.note}</Text></View>}</View></View><Text style={[styles.tableText, styles.serviceCol]}>{row.service ?? copy.notRecorded}</Text><Text style={[styles.tableText, styles.timeCol]}>{row.appointmentAtISO ? new Date(row.appointmentAtISO).toLocaleTimeString(language === "ar" ? "ar-LB" : "en-US", { hour: "numeric", minute: "2-digit" }) : "—"}</Text><View style={styles.statusCol}><View style={[styles.statusBadge, row.status === "pending" && styles.statusPending]}><Text style={[styles.statusText, row.status === "pending" && styles.statusTextPending]}>{row.status}</Text></View></View><Text style={[styles.tableText, styles.sourceCol]}>{row.contactChannel}</Text><Pressable onPress={() => router.push("/admin")} style={styles.tableAction}><Text style={styles.tableActionText}>{row.nextAction}</Text></Pressable></View>)}
             </View></ScrollView>
           </View>
           <View style={styles.insightsStack}>
