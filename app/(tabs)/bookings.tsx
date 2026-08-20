@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { ShimmerBlock } from "@/components/shimmer-block";
 import { useColors } from "@/hooks/use-colors";
+import { useLanguage } from "@/lib/i18n";
 import { trpc } from "@/lib/trpc";
 import { useThemeContext } from "@/lib/theme-provider";
 
@@ -19,6 +20,7 @@ const times = ["10:00 ص", "12:30 م", "4:00 م", "6:30 م"];
 
 export default function BookingsScreen() {
   const colors = useColors();
+  const { language } = useLanguage();
   const { colorScheme } = useThemeContext();
   const selectedSurface = colorScheme === "dark" ? "#3A220D" : "#FFF1E5";
   const [selectedService, setSelectedService] = useState(services[0].id);
@@ -29,19 +31,26 @@ export default function BookingsScreen() {
   const [status, setStatus] = useState<BookingStatus>("draft");
   const [channel, setChannel] = useState<"telegram" | "whatsapp" | null>(null);
   const [channelModalVisible, setChannelModalVisible] = useState(false);
-  const [isActivityLoading, setIsActivityLoading] = useState(true);
+  const bookingsQuery = trpc.bookings.activity.useQuery(undefined, { retry: false });
   const approveBooking = trpc.bookings.approve.useMutation();
   const service = services.find((item) => item.id === selectedService) ?? services[0];
-  const isPending = status === "pending";
-  const isApproved = status === "approved";
-  const hasBookingRequest = status !== "draft";
+  const liveAppointment = bookingsQuery.data?.appointment ?? null;
+  const effectiveStatus = status !== "draft" ? status : liveAppointment?.status === "approved" ? "approved" : liveAppointment ? "pending" : "draft";
+  const isPending = effectiveStatus === "pending";
+  const isApproved = effectiveStatus === "approved";
+  const hasBookingRequest = effectiveStatus !== "draft";
+  const isActivityLoading = bookingsQuery.isLoading;
+  const hasLiveRequestError = bookingsQuery.isError || bookingsQuery.data?.databaseAvailable === false;
   const skeletonBase = colorScheme === "dark" ? "#303235" : "#E8E7E3";
   const skeletonHighlight = colorScheme === "dark" ? "#45484C" : "#F5F3EF";
-
-  useEffect(() => {
-    const timer = setTimeout(() => setIsActivityLoading(false), 420);
-    return () => clearTimeout(timer);
-  }, []);
+  const errorCopy = language === "ar"
+    ? { title: "تعذر تحميل الحجوزات", body: "تحققي من الاتصال ثم أعيدي المحاولة لعرض حالة طلبك.", retry: "إعادة المحاولة", retrying: "جارٍ إعادة المحاولة…" }
+    : { title: "Bookings could not be loaded", body: "Check your connection, then try again to see your request status.", retry: "Try again", retrying: "Retrying…" };
+  const activityMeta = status !== "draft"
+    ? `${service.name} · ${selectedDate} · ${selectedTime}`
+    : liveAppointment?.appointmentAtISO
+      ? new Date(liveAppointment.appointmentAtISO).toLocaleString(language === "ar" ? "ar-LB" : "en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })
+      : service.name;
 
   async function submitBooking() {
     setChannelModalVisible(true);
@@ -79,7 +88,7 @@ export default function BookingsScreen() {
 
     <View style={[styles.activityPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.activityHeader}><Text style={[styles.activityTitle, { color: colors.foreground }]}>حالة حجوزاتك</Text><Text style={[styles.activityLabel, { color: colors.primary }]}>LIVE STATUS</Text></View>
-      {isActivityLoading ? <BookingActivitySkeleton base={skeletonBase} highlight={skeletonHighlight} /> : hasBookingRequest ? <View style={styles.activityBody}><View style={[styles.activityDot, { backgroundColor: isApproved ? colors.success : colors.warning }]} /><View style={styles.activityCopy}><Text style={[styles.activityStatus, { color: colors.foreground }]}>{isApproved ? "تم اعتماد طلبك" : "طلبك بانتظار الموافقة"}</Text><Text style={[styles.activityMeta, { color: colors.muted }]}>{service.name} · {selectedDate} · {selectedTime}</Text></View></View> : <View style={styles.emptyBooking}><View style={[styles.emptyIcon, { backgroundColor: selectedSurface }]}><Text style={[styles.emptyIconText, { color: colors.primary }]}>✦</Text></View><View style={styles.emptyBookingCopy}><Text style={[styles.emptyBookingTitle, { color: colors.foreground }]}>لا توجد حجوزات مرسلة بعد</Text><Text style={[styles.emptyBookingText, { color: colors.muted }]}>اختاري الخدمة والموعد أدناه لإرسال أول طلب إلى المركز.</Text></View></View>}
+      {isActivityLoading ? <BookingActivitySkeleton base={skeletonBase} highlight={skeletonHighlight} /> : hasLiveRequestError ? <BookingRequestError title={errorCopy.title} body={errorCopy.body} retryLabel={errorCopy.retry} retryingLabel={errorCopy.retrying} isRetrying={bookingsQuery.isRefetching} onRetry={() => bookingsQuery.refetch()} colors={colors} colorScheme={colorScheme} /> : hasBookingRequest ? <View style={styles.activityBody}><View style={[styles.activityDot, { backgroundColor: isApproved ? colors.success : colors.warning }]} /><View style={styles.activityCopy}><Text style={[styles.activityStatus, { color: colors.foreground }]}>{isApproved ? "تم اعتماد طلبك" : "طلبك بانتظار الموافقة"}</Text><Text style={[styles.activityMeta, { color: colors.muted }]}>{activityMeta}</Text></View></View> : <View style={styles.emptyBooking}><View style={[styles.emptyIcon, { backgroundColor: selectedSurface }]}><Text style={[styles.emptyIconText, { color: colors.primary }]}>✦</Text></View><View style={styles.emptyBookingCopy}><Text style={[styles.emptyBookingTitle, { color: colors.foreground }]}>لا توجد حجوزات مرسلة بعد</Text><Text style={[styles.emptyBookingText, { color: colors.muted }]}>اختاري الخدمة والموعد أدناه لإرسال أول طلب إلى المركز.</Text></View></View>}
     </View>
 
     <Section title="1 · اختاري الخدمة" colors={colors}><View style={styles.optionGrid}>{services.map((item) => <Pressable key={item.id} onPress={() => setSelectedService(item.id)} style={[styles.serviceCard, { backgroundColor: colors.surface, borderColor: selectedService === item.id ? colors.primary : colors.border }]}><Text style={[styles.optionTitle, { color: colors.foreground }]}>{item.name}</Text><Text style={[styles.optionMeta, { color: colors.muted }]}>{item.duration} · {item.price}</Text>{selectedService === item.id && <Text style={[styles.selectedMark, { color: colors.primary }]}>✓ مختارة</Text>}</Pressable>)}</View></Section>
@@ -95,6 +104,11 @@ export default function BookingsScreen() {
 
 function Section({ title, children, colors }: { title: string; children: React.ReactNode; colors: ReturnType<typeof useColors> }) {
   return <View style={styles.section}><Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>{children}</View>;
+}
+
+function BookingRequestError({ title, body, retryLabel, retryingLabel, isRetrying, onRetry, colors, colorScheme }: { title: string; body: string; retryLabel: string; retryingLabel: string; isRetrying: boolean; onRetry: () => void; colors: ReturnType<typeof useColors>; colorScheme: "light" | "dark" }) {
+  const isLight = colorScheme === "light";
+  return <View accessibilityRole="alert" style={[styles.requestError, { borderColor: isLight ? "#E7C3B8" : "#5A2A25", backgroundColor: isLight ? "#FFF9F6" : "#211513" }]}><View style={[styles.emptyIcon, { backgroundColor: isLight ? "#FDE9E2" : "#3B1D19" }]}><Text style={[styles.emptyIconText, { color: isLight ? "#B33A25" : "#FF9D87" }]}>!</Text></View><View style={styles.emptyBookingCopy}><Text style={[styles.emptyBookingTitle, { color: isLight ? "#4A1E17" : "#FFD8CF" }]}>{title}</Text><Text style={[styles.emptyBookingText, { color: isLight ? "#805C55" : "#CBA9A2" }]}>{body}</Text></View><Pressable accessibilityRole="button" accessibilityState={{ busy: isRetrying, disabled: isRetrying }} disabled={isRetrying} onPress={onRetry} style={[styles.retryAction, { backgroundColor: colors.primary }, isRetrying && styles.retryActionDisabled]}><Text style={styles.retryActionText}>{isRetrying ? retryingLabel : retryLabel}</Text></Pressable></View>;
 }
 
 function BookingActivitySkeleton({ base, highlight }: { base: string; highlight: string }) {
@@ -119,4 +133,5 @@ const styles = StyleSheet.create({
   skeletonActivity: { flexDirection: "row-reverse", alignItems: "center", gap: 10, paddingVertical: 4 }, skeletonDot: { width: 34, height: 34, borderRadius: 12 }, skeletonCopy: { flex: 1, alignItems: "flex-end", gap: 7 }, skeletonLine: { height: 10, borderRadius: 99 }, skeletonLinePrimary: { width: "58%" }, skeletonLineSecondary: { width: "82%" },
   activityBody: { flexDirection: "row-reverse", alignItems: "center", gap: 10 }, activityDot: { width: 9, height: 9, borderRadius: 99 }, activityCopy: { flex: 1, alignItems: "flex-end", gap: 3 }, activityStatus: { fontSize: 13, fontWeight: "900" }, activityMeta: { fontSize: 11, textAlign: "right" },
   emptyBooking: { flexDirection: "row-reverse", alignItems: "center", gap: 10 }, emptyIcon: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center" }, emptyIconText: { fontSize: 17, fontWeight: "900" }, emptyBookingCopy: { flex: 1, alignItems: "flex-end", gap: 3 }, emptyBookingTitle: { fontSize: 13, fontWeight: "900" }, emptyBookingText: { fontSize: 11, lineHeight: 17, textAlign: "right" },
+  requestError: { alignItems: "flex-end", gap: 10, borderWidth: 1, borderRadius: 14, padding: 12 }, retryAction: { minWidth: 110, alignItems: "center", borderRadius: 11, paddingHorizontal: 14, paddingVertical: 10 }, retryActionDisabled: { opacity: 0.62 }, retryActionText: { color: "#FFF", fontSize: 11, fontWeight: "900" },
 });

@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { getManagerDashboardSnapshot } from "./dashboard";
+import { getBookingActivityFeed, getConversationFeed } from "./customer-activity";
 import { sendBookingApprovalNotification } from "./telegram";
 import { getReminderState } from "./reminders";
 import { runApprovedAppointmentAutomation } from "./automation";
@@ -21,6 +22,7 @@ export const appRouter = router({
     overview: adminProcedure.query(() => getManagerDashboardSnapshot()),
   }),
   bookings: router({
+    activity: publicProcedure.query(({ ctx }) => getBookingActivityFeed(ctx.user?.id)),
     approve: publicProcedure
       .input(z.object({
         bookingId: z.string().min(1), customerUserId: z.number().int().positive().optional(), chatId: z.string().optional(), customerName: z.string().min(1), salonName: z.string().min(1), serviceName: z.string().min(1), appointmentAt: z.string().min(1), appointmentAtISO: z.string().datetime(), staffName: z.string().min(1),
@@ -38,6 +40,9 @@ export const appRouter = router({
         };
       }),
     reminderState: publicProcedure.query(() => getReminderState()),
+  }),
+  conversations: router({
+    feed: publicProcedure.query(({ ctx }) => getConversationFeed(ctx.user?.id)),
   }),
 });
 
