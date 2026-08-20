@@ -6,46 +6,78 @@ import { useColors } from "@/hooks/use-colors";
 import { trpc } from "@/lib/trpc";
 import { useThemeContext } from "@/lib/theme-provider";
 
-type RequestStatus = "pending" | "approved" | "rejected";
-type Request = { id: string; customer: string; service: string; staff: string; date: string; time: string; note: string; managerNote: string; status: RequestStatus };
-
-const initialRequests: Request[] = [
-  { id: "BC-0148", customer: "نورة أحمد", service: "تنظيف بشرة عميق", staff: "ليان", date: "غداً · 15 أغسطس", time: "10:00 ص", note: "أفضّل غرفة هادئة إن أمكن.", managerNote: "", status: "pending" },
-  { id: "BC-0147", customer: "ريم خليل", service: "تسريحة ومكياج", staff: "نور", date: "السبت · 16 أغسطس", time: "4:00 م", note: "لدي مناسبة مساءً.", managerNote: "", status: "pending" },
-  { id: "BC-0145", customer: "سلمى عوض", service: "مانيكير وبديكير", staff: "سارة", date: "اليوم · 14 أغسطس", time: "6:30 م", note: "", managerNote: "تم تأكيد الغرفة 2.", status: "approved" },
-];
+type RequestStatus = "pending" | "approved" | "rejected" | "rescheduled" | "cancelled";
+type Request = { id: string; customer: string; service: string; staff: string; date: string; time: string; note: string; managerNote: string; status: RequestStatus; appointmentAtISO?: string };
 
 export default function AdminScreen() {
   const colors = useColors();
   const { colorScheme } = useThemeContext();
   const softWarning = colorScheme === "dark" ? "#3A2A0C" : "#FEF3C7";
-  const [requests, setRequests] = useState(initialRequests);
+  const queueQuery = trpc.bookings.queue.useQuery(undefined, { retry: false, refetchInterval: 15000 });
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const approveBooking = trpc.bookings.approve.useMutation();
+  const rejectBooking = trpc.bookings.reject.useMutation();
+  const requests = useMemo<Request[]>(() => (queueQuery.data?.items ?? []).map((item) => ({
+    id: item.id,
+    customer: item.customer,
+    service: item.service,
+    staff: item.staff,
+    date: item.date,
+    time: item.time,
+    note: item.note,
+    managerNote: notes[item.id] ?? item.managerNote,
+    status: item.status,
+    appointmentAtISO: item.appointmentAtISO,
+  })), [notes, queueQuery.data?.items]);
   const pending = useMemo(() => requests.filter((item) => item.status === "pending"), [requests]);
   const processed = useMemo(() => requests.filter((item) => item.status !== "pending"), [requests]);
+  const busy = approveBooking.isPending || rejectBooking.isPending;
 
   async function handleApprove(request: Request) {
     try {
-      const result = await approveBooking.mutateAsync({ bookingId: request.id, customerName: request.customer, salonName: "Glow Studio", serviceName: request.service, appointmentAt: `${request.date} · ${request.time}`, appointmentAtISO: "2026-08-15T07:00:00.000Z", staffName: request.staff });
-      setRequests((current) => current.map((item) => item.id === request.id ? { ...item, status: "approved" } : item));
-      Alert.alert("تمت الموافقة", result.notification.delivered ? `تم إشعار ${request.customer} عبر Telegram وجدولة التذكير.` : "تم تحديث الحالة، لكن Telegram غير متصل لهذا العميل.");
+      const result = await approveBooking.mutateAsync({
+        bookingId: request.id,
+        customerName: request.customer,
+        salonName: "JUST beauty",
+        serviceName: request.service,
+        appointmentAt: request.date,
+        appointmentAtISO: request.appointmentAtISO ?? "2026-08-21T07:00:00.000Z",
+        staffName: request.staff,
+        managerNote: request.managerNote,
+      });
+      await queueQuery.refetch();
+      Alert.alert("تمت الموافقة", result.notification.delivered ? `تم إشعار ${request.customer} عبر Telegram وجدولة التذكير.` : "تم حفظ الموافقة في قاعدة البيانات.");
     } catch {
       Alert.alert("تعذر تنفيذ الموافقة", "لم يتم تحديث الطلب. تحققي من الاتصال وحاولي مرة أخرى.");
     }
   }
 
-  function handleReject(request: Request) {
-    setRequests((current) => current.map((item) => item.id === request.id ? { ...item, status: "rejected" } : item));
-    Alert.alert("تم رفض الطلب", `تم حفظ رفض طلب ${request.customer}. يمكنك التواصل معها لإرسال وقت بديل.`);
+  async function handleReject(request: Request) {
+    try {
+      await rejectBooking.mutateAsync({
+        bookingId: request.id,
+        customerName: request.customer,
+        salonName: "JUST beauty",
+        serviceName: request.service,
+        appointmentAt: request.date,
+        appointmentAtISO: request.appointmentAtISO ?? "2026-08-21T07:00:00.000Z",
+        staffName: request.staff,
+        managerNote: request.managerNote,
+      });
+      await queueQuery.refetch();
+      Alert.alert("تم رفض الطلب", `تم حفظ رفض طلب ${request.customer} في قاعدة البيانات.`);
+    } catch {
+      Alert.alert("تعذر الرفض", "لم يتم تحديث الطلب. حاولي مرة أخرى.");
+    }
   }
 
   return <ScreenContainer className="px-5 pt-4"><ScrollView contentContainerStyle={styles.content}>
     <Text style={[styles.eyebrow, { color: colors.primary }]}>CENTER MANAGEMENT</Text>
     <View style={styles.headerRow}><View style={[styles.countBadge, { backgroundColor: softWarning }]}><Text style={{ color: colors.warning, fontWeight: "900" }}>{pending.length} معلّقة</Text></View><View><Text style={[styles.title, { color: colors.foreground }]}>لوحة المركز</Text><Text style={[styles.subtitle, { color: colors.muted }]}>راجعي الطلبات وثبّتي المواعيد بسهولة.</Text></View></View>
     <Pressable onPress={() => router.push("/help")} style={[styles.helpButton, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.helpTitle, { color: colors.foreground }]}>دليل المديرة</Text><Text style={[styles.helpBody, { color: colors.muted }]}>التسجيل، الحجوزات، الإشعارات، Telegram وWhatsApp</Text><Text style={[styles.helpAction, { color: colors.primary }]}>فتح الدليل ›</Text></Pressable>
-    <View style={[styles.stats, { backgroundColor: colors.surface, borderColor: colors.border }]}><Stat label="طلبات اليوم" value="08" color={colors.primary} muted={colors.muted} /><Stat label="بانتظار القرار" value={String(pending.length).padStart(2, "0")} color={colors.warning} muted={colors.muted} /><Stat label="تمت الموافقة" value={String(requests.filter((item) => item.status === "approved").length).padStart(2, "0")} color={colors.success} muted={colors.muted} /></View>
+    <View style={[styles.stats, { backgroundColor: colors.surface, borderColor: colors.border }]}><Stat label="كل الطلبات" value={String(requests.length).padStart(2, "0")} color={colors.primary} muted={colors.muted} /><Stat label="بانتظار القرار" value={String(pending.length).padStart(2, "0")} color={colors.warning} muted={colors.muted} /><Stat label="تمت الموافقة" value={String(requests.filter((item) => item.status === "approved").length).padStart(2, "0")} color={colors.success} muted={colors.muted} /></View>
     <Text style={[styles.sectionTitle, { color: colors.foreground }]}>طلبات بانتظار الموافقة</Text>
-    {pending.length === 0 ? <View style={[styles.empty, { borderColor: colors.border }]}><Text style={{ fontSize: 28 }}>✓</Text><Text style={[styles.emptyTitle, { color: colors.foreground }]}>لا توجد طلبات معلّقة</Text><Text style={[styles.subtitle, { color: colors.muted }]}>كل الطلبات تمت مراجعتها.</Text></View> : pending.map((request) => <RequestCard key={request.id} request={request} colors={colors} colorScheme={colorScheme} busy={approveBooking.isPending} onApprove={() => handleApprove(request)} onReject={() => handleReject(request)} onManagerNoteChange={(managerNote) => setRequests((current) => current.map((item) => item.id === request.id ? { ...item, managerNote } : item))} />)}
+    {queueQuery.data?.databaseAvailable === false ? <View style={[styles.empty, { borderColor: colors.border }]}><Text style={[styles.emptyTitle, { color: colors.foreground }]}>قاعدة البيانات غير متصلة</Text><Text style={[styles.subtitle, { color: colors.muted }]}>تحققي من الخادم ثم أعيدي المحاولة.</Text></View> : pending.length === 0 ? <View style={[styles.empty, { borderColor: colors.border }]}><Text style={{ fontSize: 28 }}>✓</Text><Text style={[styles.emptyTitle, { color: colors.foreground }]}>لا توجد طلبات معلّقة</Text><Text style={[styles.subtitle, { color: colors.muted }]}>كل الطلبات تمت مراجعتها.</Text></View> : pending.map((request) => <RequestCard key={request.id} request={request} colors={colors} colorScheme={colorScheme} busy={busy} onApprove={() => handleApprove(request)} onReject={() => handleReject(request)} onManagerNoteChange={(managerNote) => setNotes((current) => ({ ...current, [request.id]: managerNote }))} />)}
     {processed.length > 0 && <><Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 5 }]}>آخر القرارات</Text>{processed.map((request) => <ProcessedRow key={request.id} request={request} colors={colors} colorScheme={colorScheme} />)}</>}
   </ScrollView></ScreenContainer>;
 }

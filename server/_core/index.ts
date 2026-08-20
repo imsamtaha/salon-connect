@@ -7,7 +7,9 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { getDb } from "../db";
 import { processDueTelegramReminders } from "../reminders";
+import { seedIfEmpty } from "../seed";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -59,8 +61,9 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, timestamp: Date.now() });
+  app.get("/api/health", async (_req, res) => {
+    const db = await getDb();
+    res.json({ ok: true, database: Boolean(db), timestamp: Date.now() });
   });
 
   app.post("/api/scheduled/telegram-reminders", async (_req, res) => {
@@ -86,6 +89,14 @@ async function startServer() {
 
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+  }
+
+  const db = await getDb();
+  if (db) {
+    const seed = await seedIfEmpty();
+    console.log(`[database] ready (${seed.reason})`);
+  } else {
+    console.warn("[database] unavailable");
   }
 
   server.listen(port, () => {

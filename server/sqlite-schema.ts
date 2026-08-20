@@ -1,0 +1,63 @@
+export const SQLITE_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    openId TEXT NOT NULL UNIQUE,
+    name TEXT,
+    email TEXT,
+    loginMethod TEXT,
+    passwordHash TEXT,
+    role TEXT NOT NULL DEFAULT 'user',
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL,
+    lastSignedIn INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS customer_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER NOT NULL UNIQUE,
+    phone TEXT,
+    telegramChatId TEXT,
+    preferredStaff TEXT,
+    notes TEXT,
+    lastAppointmentId TEXT,
+    lastAppointmentStatus TEXT,
+    lastAppointmentAt INTEGER,
+    lastReminderAt INTEGER,
+    reminderStatus TEXT NOT NULL DEFAULT 'not_scheduled',
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    publicId TEXT NOT NULL UNIQUE,
+    customerUserId INTEGER,
+    customerName TEXT NOT NULL,
+    salonName TEXT NOT NULL,
+    serviceName TEXT NOT NULL,
+    staffName TEXT NOT NULL,
+    appointmentAt INTEGER NOT NULL,
+    appointmentLabel TEXT NOT NULL,
+    customerNote TEXT,
+    managerNote TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    contactChannel TEXT NOT NULL DEFAULT 'telegram',
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    salonName TEXT,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversationId INTEGER NOT NULL,
+    userId INTEGER NOT NULL,
+    sender TEXT NOT NULL,
+    body TEXT NOT NULL,
+    read INTEGER NOT NULL DEFAULT 0,
+    createdAt INTEGER NOT NULL
+  )`,
+];
