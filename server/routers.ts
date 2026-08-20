@@ -1,48 +1,110 @@
 import { z } from "zod";
+
 import { getSessionCookieOptions } from "./_core/cookies";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
-import { adminProcedure, publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, router } from "./_core/trpc";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
+import { createBookingRequest, decideBooking, getLatestBooking, listBookings } from "./bookings";
+import { getConversationFeed } from "./customer-activity";
 import { getManagerDashboardSnapshot } from "./dashboard";
-import { getBookingActivityFeed, getConversationFeed } from "./customer-activity";
-import { sendBookingApprovalNotification } from "./telegram";
+import { localAppId, loginLocalUser, registerLocalUser, sessionNameFor } from "./local-auth";
 import { getReminderState } from "./reminders";
-import { runApprovedAppointmentAutomation } from "./automation";
+
+const bookingDecisionInput = z.object({
+  bookingId: z.string().min(1),
+  customerUserId: z.number().int().positive().optional(),
+  chatId: z.string().optional(),
+  customerName: z.string().min(1),
+  salonName: z.string().min(1),
+  serviceName: z.string().min(1),
+  appointmentAt: z.string().min(1),
+  appointmentAtISO: z.string().datetime(),
+  staffName: z.string().min(1),
+  managerNote: z.string().optional(),
+});
+
+async function issueSession(opts: { user: { openId: string; name: string | null; email: string | null }; ctx: { req: any; res: any } }) {
+  const sessionToken = await sdk.createSessionToken(opts.user.openId, {
+    name: sessionNameFor(opts.user),
+    expiresInMs: ONE_YEAR_MS,
+  });
+  const cookieOptions = getSessionCookieOptions(opts.ctx.req);
+  opts.ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+  return {
+    success: true as const,
+    sessionToken,
+    user: {
+      openId: opts.user.openId,
+      name: opts.user.name,
+      email: opts.user.email,
+    },
+  };
+}
 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+    register: publicProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        email: z.string().email(),
+        password: z.string().min(6),
+        phone: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await registerLocalUser(input);
+        return issueSession({ user, ctx });
+      }),
+    login: publicProcedure
+      .input(z.object({
+        email: z.string().email(),
+        password: z.string().min(6),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const user = await loginLocalUser(input);
+        return issueSession({ user, ctx });
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie("manus_session", { ...cookieOptions, maxAge: -1 });
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
   }),
   dashboard: router({
-    overview: adminProcedure.query(() => getManagerDashboardSnapshot()),
+    overview: publicProcedure.query(() => getManagerDashboardSnapshot()),
   }),
   bookings: router({
-    activity: publicProcedure.query(({ ctx }) => getBookingActivityFeed(ctx.user?.id)),
-    approve: publicProcedure
+    activity: publicProcedure.query(({ ctx }) => getLatestBooking(ctx.user?.id)),
+    queue: publicProcedure.query(() => listBookings()),
+    create: publicProcedure
       .input(z.object({
-        bookingId: z.string().min(1), customerUserId: z.number().int().positive().optional(), chatId: z.string().optional(), customerName: z.string().min(1), salonName: z.string().min(1), serviceName: z.string().min(1), appointmentAt: z.string().min(1), appointmentAtISO: z.string().datetime(), staffName: z.string().min(1),
+        customerName: z.string().min(1).optional(),
+        salonName: z.string().min(1).optional(),
+        serviceName: z.string().min(1),
+        staffName: z.string().min(1),
+        appointmentAtISO: z.string().datetime(),
+        appointmentLabel: z.string().min(1),
+        customerNote: z.string().optional(),
+        contactChannel: z.enum(["telegram", "whatsapp", "direct"]).optional(),
       }))
-      .mutation(async ({ input }) => {
-        const notification = await sendBookingApprovalNotification(input);
-        const automation = await runApprovedAppointmentAutomation(input);
-        return {
-          bookingId: input.bookingId,
-          status: "approved" as const,
-          notification,
-          reminderScheduler: automation.reminderScheduler,
-          customerRecordUpdated: automation.customerRecordUpdated,
-          reminderAtISO: automation.snapshot.reminderAtISO,
-        };
-      }),
+      .mutation(({ ctx, input }) => createBookingRequest({
+        ...input,
+        customerUserId: ctx.user?.id,
+        customerName: ctx.user?.name?.trim() || input.customerName || "عميلة",
+      })),
+    approve: publicProcedure
+      .input(bookingDecisionInput)
+      .mutation(({ input }) => decideBooking({ ...input, status: "approved" })),
+    reject: publicProcedure
+      .input(bookingDecisionInput)
+      .mutation(({ input }) => decideBooking({ ...input, status: "rejected" })),
     reminderState: publicProcedure.query(() => getReminderState()),
   }),
   conversations: router({
-    feed: publicProcedure.query(({ ctx }) => getConversationFeed(ctx.user?.id)),
+    feed: publicProcedure.query(({ ctx }) => getConversationFeed(ctx.user?.id, ctx.user?.role)),
   }),
 });
 

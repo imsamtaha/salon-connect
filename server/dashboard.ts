@@ -1,6 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 
-import { customerProfiles, users } from "../drizzle/schema";
+import { bookings } from "../drizzle/schema";
 import { getDb } from "./db";
 
 export type DashboardProfileRecord = {
@@ -10,6 +10,7 @@ export type DashboardProfileRecord = {
   phone: string | null;
   telegramChatId: string | null;
   note: string | null;
+  serviceName?: string | null;
   appointmentId: string | null;
   appointmentStatus: "pending" | "approved" | "rejected" | "rescheduled" | "cancelled" | null;
   appointmentAt: Date | null;
@@ -50,7 +51,7 @@ export function createDashboardSnapshot(records: DashboardProfileRecord[], now =
       .map((record) => ({
         id: record.appointmentId as string,
         client: record.clientName?.trim() || "Customer record",
-        service: null as string | null,
+        service: record.serviceName ?? null,
         appointmentAtISO: record.appointmentAt?.toISOString() ?? null,
         status: record.appointmentStatus ?? "pending",
         contactChannel: record.telegramChatId ? "Telegram" : record.phone ? "Direct" : "Website",
@@ -67,22 +68,25 @@ export async function getManagerDashboardSnapshot() {
   }
 
   const records = await db
-    .select({
-      profileId: customerProfiles.id,
-      userId: customerProfiles.userId,
-      clientName: users.name,
-      phone: customerProfiles.phone,
-      telegramChatId: customerProfiles.telegramChatId,
-      note: customerProfiles.notes,
-      appointmentId: customerProfiles.lastAppointmentId,
-      appointmentStatus: customerProfiles.lastAppointmentStatus,
-      appointmentAt: customerProfiles.lastAppointmentAt,
-      updatedAt: customerProfiles.updatedAt,
-    })
-    .from(customerProfiles)
-    .leftJoin(users, eq(customerProfiles.userId, users.id))
-    .orderBy(desc(customerProfiles.updatedAt))
+    .select()
+    .from(bookings)
+    .orderBy(desc(bookings.updatedAt))
     .limit(40);
 
-  return { databaseAvailable: true, ...createDashboardSnapshot(records) };
+  return {
+    databaseAvailable: true,
+    ...createDashboardSnapshot(records.map((record) => ({
+      profileId: record.id,
+      userId: record.customerUserId ?? 0,
+      clientName: record.customerName,
+      phone: null,
+      telegramChatId: record.contactChannel === "telegram" ? "connected" : null,
+      note: record.customerNote,
+      serviceName: record.serviceName,
+      appointmentId: record.publicId,
+      appointmentStatus: record.status,
+      appointmentAt: record.appointmentAt,
+      updatedAt: record.updatedAt,
+    }))),
+  };
 }

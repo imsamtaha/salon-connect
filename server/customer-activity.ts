@@ -75,27 +75,24 @@ export async function getBookingActivityFeed(userId?: number) {
   return { databaseAvailable: true, ...createBookingActivitySnapshot(record ?? null) };
 }
 
-export async function getConversationFeed(userId?: number) {
+export async function getConversationFeed(userId?: number, role?: "user" | "admin") {
   const db = await getDb();
   if (!db) {
     return { databaseAvailable: false, ...createConversationFeed([]) };
   }
 
-  if (!userId) {
-    return { databaseAvailable: true, ...createConversationFeed([]) };
-  }
-
-  const threadRows = await db
+  const threadQuery = db
     .select({
       id: conversations.id,
       title: conversations.title,
       salonName: conversations.salonName,
       updatedAt: conversations.updatedAt,
     })
-    .from(conversations)
-    .where(eq(conversations.userId, userId))
-    .orderBy(desc(conversations.updatedAt))
-    .limit(20);
+    .from(conversations);
+
+  const threadRows = userId && role !== "admin"
+    ? await threadQuery.where(eq(conversations.userId, userId)).orderBy(desc(conversations.updatedAt)).limit(20)
+    : await threadQuery.orderBy(desc(conversations.updatedAt)).limit(20);
 
   if (threadRows.length === 0) {
     return { databaseAvailable: true, ...createConversationFeed([]) };

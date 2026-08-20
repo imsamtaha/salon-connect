@@ -1,54 +1,82 @@
-import { boolean, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+export const users = sqliteTable("users", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  openId: text("openId").notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  email: text("email"),
+  loginMethod: text("loginMethod"),
+  passwordHash: text("passwordHash"),
+  role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
-export const customerProfiles = mysqlTable("customer_profiles", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull().unique(),
-  phone: varchar("phone", { length: 32 }),
-  telegramChatId: varchar("telegramChatId", { length: 128 }),
-  preferredStaff: varchar("preferredStaff", { length: 128 }),
+export const customerProfiles = sqliteTable("customer_profiles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull().unique(),
+  phone: text("phone"),
+  telegramChatId: text("telegramChatId"),
+  preferredStaff: text("preferredStaff"),
   notes: text("notes"),
-  lastAppointmentId: varchar("lastAppointmentId", { length: 128 }),
-  lastAppointmentStatus: mysqlEnum("lastAppointmentStatus", ["pending", "approved", "rejected", "rescheduled", "cancelled"]),
-  lastAppointmentAt: timestamp("lastAppointmentAt"),
-  lastReminderAt: timestamp("lastReminderAt"),
-  reminderStatus: mysqlEnum("reminderStatus", ["not_scheduled", "scheduled", "sent", "cancelled", "failed"]).default("not_scheduled").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  lastAppointmentId: text("lastAppointmentId"),
+  lastAppointmentStatus: text("lastAppointmentStatus", {
+    enum: ["pending", "approved", "rejected", "rescheduled", "cancelled"],
+  }),
+  lastAppointmentAt: integer("lastAppointmentAt", { mode: "timestamp" }),
+  lastReminderAt: integer("lastReminderAt", { mode: "timestamp" }),
+  reminderStatus: text("reminderStatus", {
+    enum: ["not_scheduled", "scheduled", "sent", "cancelled", "failed"],
+  }).default("not_scheduled").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
-export const conversations = mysqlTable("conversations", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  title: varchar("title", { length: 255 }).notNull(),
-  salonName: varchar("salonName", { length: 255 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+export const bookings = sqliteTable("bookings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  publicId: text("publicId").notNull().unique(),
+  customerUserId: integer("customerUserId"),
+  customerName: text("customerName").notNull(),
+  salonName: text("salonName").notNull(),
+  serviceName: text("serviceName").notNull(),
+  staffName: text("staffName").notNull(),
+  appointmentAt: integer("appointmentAt", { mode: "timestamp" }).notNull(),
+  appointmentLabel: text("appointmentLabel").notNull(),
+  customerNote: text("customerNote"),
+  managerNote: text("managerNote"),
+  status: text("status", {
+    enum: ["pending", "approved", "rejected", "rescheduled", "cancelled"],
+  }).default("pending").notNull(),
+  contactChannel: text("contactChannel", {
+    enum: ["telegram", "whatsapp", "direct"],
+  }).default("telegram").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
-export const messages = mysqlTable("messages", {
-  id: int("id").autoincrement().primaryKey(),
-  conversationId: int("conversationId").notNull(),
-  userId: int("userId").notNull(),
-  sender: mysqlEnum("sender", ["customer", "center"]).notNull(),
+export const conversations = sqliteTable("conversations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId").notNull(),
+  title: text("title").notNull(),
+  salonName: text("salonName"),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+});
+
+export const messages = sqliteTable("messages", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  conversationId: integer("conversationId").notNull(),
+  userId: integer("userId").notNull(),
+  sender: text("sender", { enum: ["customer", "center"] }).notNull(),
   body: text("body").notNull(),
-  read: boolean("read").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  read: integer("read", { mode: "boolean" }).default(false).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type CustomerProfile = typeof customerProfiles.$inferSelect;
+export type Booking = typeof bookings.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
