@@ -76,6 +76,7 @@ export async function getBookingActivityFeed(userId?: number) {
 }
 
 export async function getConversationFeed(userId?: number, role?: "user" | "admin") {
+  if (!userId) return { databaseAvailable: true, ...createConversationFeed([]) };
   const db = await getDb();
   if (!db) {
     return { databaseAvailable: false, ...createConversationFeed([]) };
@@ -125,3 +126,4 @@ export async function getConversationFeed(userId?: number, role?: "user" | "admi
     ),
   };
 }
+

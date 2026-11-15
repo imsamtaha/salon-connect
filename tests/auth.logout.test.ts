@@ -30,6 +30,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     user,
     req: {
       protocol: "https",
+      hostname: "salon.example.com",
       headers: {},
     } as TrpcContext["req"],
     res: {
@@ -42,8 +43,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
   return { ctx, clearedCookies };
 }
 
-// TODO: Remove `.skip` below once you implement user authentication
-describe.skip("auth.logout", () => {
+describe("auth.logout", () => {
   it("clears the session cookie and reports success", async () => {
     const { ctx, clearedCookies } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
@@ -51,9 +51,8 @@ describe.skip("auth.logout", () => {
     const result = await caller.auth.logout();
 
     expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({
+    expect(clearedCookies.map(cookie => cookie.name)).toEqual(["manus_session", COOKIE_NAME]);
+    expect(clearedCookies[1]?.options).toMatchObject({
       maxAge: -1,
       secure: true,
       sameSite: "none",
@@ -62,3 +61,4 @@ describe.skip("auth.logout", () => {
     });
   });
 });
+

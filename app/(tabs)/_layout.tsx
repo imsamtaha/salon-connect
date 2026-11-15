@@ -1,3 +1,5 @@
+import { trpc } from "@/lib/trpc";
+import { useLanguage } from "@/lib/i18n";
 import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Platform, useWindowDimensions } from "react-native";
@@ -7,6 +9,9 @@ import { useColors } from "@/hooks/use-colors";
 
 export default function TabLayout() {
   const colors = useColors();
+  const { language } = useLanguage();
+  const session = trpc.auth.me.useQuery();
+  const ar = language === "ar";
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isDesktopWeb = Platform.OS === "web" && width >= 900;
@@ -23,10 +28,11 @@ export default function TabLayout() {
       : { paddingTop: 8, paddingBottom: bottomPadding, height: 56 + bottomPadding, backgroundColor: colors.background, borderTopColor: colors.border, borderTopWidth: 0.5 },
     tabBarItemStyle: isDesktopWeb ? { borderRadius: 12, marginVertical: 4, minHeight: 48 } : undefined,
   }}>
-    <Tabs.Screen name="index" options={{ title: "الرئيسية", tabBarIcon: ({ color }) => <IconSymbol size={23} name="house.fill" color={color} /> }} />
-    <Tabs.Screen name="bookings" options={{ title: "مواعيدي", tabBarIcon: ({ color }) => <IconSymbol size={23} name="calendar" color={color} /> }} />
-    <Tabs.Screen name="messages" options={{ title: "المحادثات", tabBarIcon: ({ color }) => <IconSymbol size={23} name="message" color={color} /> }} />
-    <Tabs.Screen name="profile" options={{ title: "حسابي", tabBarIcon: ({ color }) => <IconSymbol size={23} name="person" color={color} /> }} />
-    <Tabs.Screen name="admin" options={{ title: "إدارة المركز", tabBarIcon: ({ color }) => <IconSymbol size={23} name="person" color={color} /> }} />
+    <Tabs.Screen name="index" options={{ title: ar ? "الرئيسية" : "Overview", tabBarIcon: ({ color }) => <IconSymbol size={23} name="house.fill" color={color} /> }} />
+    <Tabs.Screen name="bookings" options={{ title: ar ? "مواعيدي" : "Bookings", tabBarIcon: ({ color }) => <IconSymbol size={23} name="calendar" color={color} /> }} />
+    <Tabs.Screen name="messages" options={{ title: ar ? "المحادثات" : "Messages", tabBarIcon: ({ color }) => <IconSymbol size={23} name="message" color={color} /> }} />
+    <Tabs.Screen name="profile" options={{ title: ar ? "حسابي" : "Profile", tabBarIcon: ({ color }) => <IconSymbol size={23} name="person" color={color} /> }} />
+    <Tabs.Screen name="admin" options={{ href: session.data?.role === "admin" ? undefined : null, title: ar ? "إدارة المركز" : "Manage", tabBarIcon: ({ color }) => <IconSymbol size={23} name="person" color={color} /> }} />
   </Tabs>;
 }
+
