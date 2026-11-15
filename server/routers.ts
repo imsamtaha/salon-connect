@@ -3,25 +3,25 @@ import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
 import { createBookingRequest, decideBooking, getLatestBooking, listBookings } from "./bookings";
 import { getConversationFeed } from "./customer-activity";
 import { getManagerDashboardSnapshot } from "./dashboard";
-import { localAppId, loginLocalUser, registerLocalUser, sessionNameFor } from "./local-auth";
+import { loginLocalUser, registerLocalUser, sessionNameFor } from "./local-auth";
 import { getReminderState } from "./reminders";
 
 const bookingDecisionInput = z.object({
-  bookingId: z.string().min(1),
+  bookingId: z.string().trim().min(1).max(200),
   customerUserId: z.number().int().positive().optional(),
   chatId: z.string().optional(),
-  customerName: z.string().min(1),
-  salonName: z.string().min(1),
-  serviceName: z.string().min(1),
-  appointmentAt: z.string().min(1),
+  customerName: z.string().trim().min(1).max(200),
+  salonName: z.string().trim().min(1).max(200),
+  serviceName: z.string().trim().min(1).max(200),
+  appointmentAt: z.string().trim().min(1).max(200),
   appointmentAtISO: z.string().datetime(),
-  staffName: z.string().min(1),
-  managerNote: z.string().optional(),
+  staffName: z.string().trim().min(1).max(200),
+  managerNote: z.string().trim().max(300).optional(),
 });
 
 async function issueSession(opts: { user: { openId: string; name: string | null; email: string | null }; ctx: { req: any; res: any } }) {
@@ -45,10 +45,12 @@ async function issueSession(opts: { user: { openId: string; name: string | null;
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
+    me: publicProcedure.query(({ ctx }) => ctx.user ? {
+      id: ctx.user.id, name: ctx.user.name, email: ctx.user.email, role: ctx.user.role,
+    } : null),
     register: publicProcedure
       .input(z.object({
-        name: z.string().min(1),
+        name: z.string().trim().min(1).max(200),
         email: z.string().email(),
         password: z.string().min(6),
         phone: z.string().optional(),
@@ -74,20 +76,20 @@ export const appRouter = router({
     }),
   }),
   dashboard: router({
-    overview: publicProcedure.query(() => getManagerDashboardSnapshot()),
+    overview: adminProcedure.query(() => getManagerDashboardSnapshot()),
   }),
   bookings: router({
-    activity: publicProcedure.query(({ ctx }) => getLatestBooking(ctx.user?.id)),
-    queue: publicProcedure.query(() => listBookings()),
-    create: publicProcedure
+    activity: protectedProcedure.query(({ ctx }) => getLatestBooking(ctx.user.id)),
+    queue: adminProcedure.query(() => listBookings()),
+    create: protectedProcedure
       .input(z.object({
-        customerName: z.string().min(1).optional(),
-        salonName: z.string().min(1).optional(),
-        serviceName: z.string().min(1),
-        staffName: z.string().min(1),
+        customerName: z.string().trim().min(1).max(200).optional(),
+        salonName: z.string().trim().min(1).max(200).optional(),
+        serviceName: z.string().trim().min(1).max(200),
+        staffName: z.string().trim().min(1).max(200),
         appointmentAtISO: z.string().datetime(),
-        appointmentLabel: z.string().min(1),
-        customerNote: z.string().optional(),
+        appointmentLabel: z.string().trim().min(1).max(200),
+        customerNote: z.string().trim().max(2000).optional(),
         contactChannel: z.enum(["telegram", "whatsapp", "direct"]).optional(),
       }))
       .mutation(({ ctx, input }) => createBookingRequest({
@@ -95,17 +97,18 @@ export const appRouter = router({
         customerUserId: ctx.user?.id,
         customerName: ctx.user?.name?.trim() || input.customerName || "عميلة",
       })),
-    approve: publicProcedure
+    approve: adminProcedure
       .input(bookingDecisionInput)
       .mutation(({ input }) => decideBooking({ ...input, status: "approved" })),
-    reject: publicProcedure
+    reject: adminProcedure
       .input(bookingDecisionInput)
       .mutation(({ input }) => decideBooking({ ...input, status: "rejected" })),
-    reminderState: publicProcedure.query(() => getReminderState()),
+    reminderState: adminProcedure.query(() => getReminderState()),
   }),
   conversations: router({
-    feed: publicProcedure.query(({ ctx }) => getConversationFeed(ctx.user?.id, ctx.user?.role)),
+    feed: protectedProcedure.query(({ ctx }) => getConversationFeed(ctx.user.id, ctx.user.role)),
   }),
 });
 
 export type AppRouter = typeof appRouter;
+

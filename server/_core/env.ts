@@ -1,3 +1,7 @@
+if (process.env.NODE_ENV === "production" && (process.env.JWT_SECRET?.length ?? 0) < 32) {
+  throw new Error("Set a unique JWT_SECRET of at least 32 characters for production");
+}
+
 export const ENV = {
   appId: process.env.VITE_APP_ID || process.env.EXPO_PUBLIC_APP_ID || "salon-connect-local",
   cookieSecret: process.env.JWT_SECRET || "dev-salon-connect-session-secret",
@@ -8,3 +12,4 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
 };
+

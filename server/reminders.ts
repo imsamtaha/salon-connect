@@ -28,11 +28,13 @@ export function registerApprovedBooking(booking: Omit<ApprovedBooking, "reminder
 }
 
 export async function ensureReminderHeartbeat() {
+  if (!process.env.SCHEDULER_SECRET) throw new Error("SCHEDULER_SECRET is required for reminder callbacks");
   if (heartbeatTaskUid || heartbeatSetupPromise) return heartbeatSetupPromise;
   heartbeatSetupPromise = createHeartbeatJob({
     name: "salon-connect-telegram-reminders",
     cron: "0 * * * * *",
     path: "/api/scheduled/telegram-reminders",
+    payload: { schedulerSecret: process.env.SCHEDULER_SECRET },
     description: "Checks approved Salon Connect appointments and sends Telegram reminders 24 hours before the appointment.",
   }, "").then(({ taskUid }) => {
     heartbeatTaskUid = taskUid;
@@ -67,3 +69,4 @@ export async function processDueTelegramReminders(now = Date.now()) {
 export function getReminderState() {
   return { trackedBookings: approvedBookings.size, heartbeatConfigured: Boolean(heartbeatTaskUid) };
 }
+

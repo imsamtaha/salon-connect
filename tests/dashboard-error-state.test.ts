@@ -18,9 +18,7 @@ describe("live CRM request failure UI", () => {
 
   it("routes unavailable live CRM data through the error state instead of an empty state", () => {
     expect(dashboardSource).toContain("const hasLiveRequestError");
-    expect(dashboardSource).toContain(
-      "hasLiveRequestError ? <CrmRequestError",
-    );
+    expect(dashboardSource).toMatch(/hasLiveRequestError\s*\?\s*\(?\s*<CrmRequestError/);
     expect(dashboardSource).toContain('retry: false');
   });
 });

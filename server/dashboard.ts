@@ -18,9 +18,11 @@ export type DashboardProfileRecord = {
 };
 
 function isSameLocalDay(value: Date, reference: Date) {
-  return value.getFullYear() === reference.getFullYear()
-    && value.getMonth() === reference.getMonth()
-    && value.getDate() === reference.getDate();
+  const day = (date: Date) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: process.env.SALON_TIMEZONE || "Asia/Beirut",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(date);
+  return day(value) === day(reference);
 }
 
 function nextAction(status: DashboardProfileRecord["appointmentStatus"]) {
@@ -70,8 +72,7 @@ export async function getManagerDashboardSnapshot() {
   const records = await db
     .select()
     .from(bookings)
-    .orderBy(desc(bookings.updatedAt))
-    .limit(40);
+    .orderBy(desc(bookings.updatedAt));
 
   return {
     databaseAvailable: true,
@@ -90,3 +91,4 @@ export async function getManagerDashboardSnapshot() {
     }))),
   };
 }
+

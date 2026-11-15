@@ -1,11 +1,23 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { TRPCError } from "@trpc/server";
 
-import { bookings, conversations, customerProfiles, messages } from "../drizzle/schema";
+import {
+  bookings,
+  conversations,
+  customerProfiles,
+  messages,
+} from "../drizzle/schema";
 import { runApprovedAppointmentAutomation } from "./automation";
 import { getDb } from "./db";
 import { sendBookingApprovalNotification } from "./telegram";
 
-export type BookingStatus = "pending" | "approved" | "rejected" | "rescheduled" | "cancelled";
+export type BookingStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "rescheduled"
+  | "cancelled";
 export type ContactChannel = "telegram" | "whatsapp" | "direct";
 
 export type CreateBookingInput = {
@@ -70,11 +82,18 @@ function asRecord(row: typeof bookings.$inferSelect): BookingRecord {
 export async function listBookings(options: { customerUserId?: number } = {}) {
   const db = await getDb();
   if (!db) {
-    return { databaseAvailable: false as const, items: [] as ReturnType<typeof toQueueItem>[] };
+    return {
+      databaseAvailable: false as const,
+      items: [] as ReturnType<typeof toQueueItem>[],
+    };
   }
 
   const rows = options.customerUserId
-    ? await db.select().from(bookings).where(eq(bookings.customerUserId, options.customerUserId)).orderBy(desc(bookings.updatedAt))
+    ? await db
+        .select()
+        .from(bookings)
+        .where(eq(bookings.customerUserId, options.customerUserId))
+        .orderBy(desc(bookings.updatedAt))
     : await db.select().from(bookings).orderBy(desc(bookings.updatedAt));
 
   return {
@@ -86,7 +105,8 @@ export async function listBookings(options: { customerUserId?: number } = {}) {
 export async function getLatestBooking(customerUserId?: number) {
   const db = await getDb();
   if (!db) return { databaseAvailable: false as const, appointment: null };
-  if (!customerUserId) return { databaseAvailable: true as const, appointment: null };
+  if (!customerUserId)
+    return { databaseAvailable: true as const, appointment: null };
 
   const [row] = await db
     .select()
@@ -121,75 +141,93 @@ export async function createBookingRequest(input: CreateBookingInput) {
     throw new Error("appointmentAtISO must be a valid ISO timestamp");
   }
 
-  const existing = await db.select({ id: bookings.id }).from(bookings);
   const now = new Date();
-  const publicId = nextBookingPublicId(existing.length);
+  if (appointmentAt <= now) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Choose a future appointment",
+    });
+  }
+  const publicId = `BC-${randomUUID()}`;
   const salonName = input.salonName?.trim() || "JUST beauty";
   const contactChannel = input.contactChannel ?? "telegram";
 
-  await db.insert(bookings).values({
-    publicId,
-    customerUserId: input.customerUserId,
-    customerName: input.customerName,
-    salonName,
-    serviceName: input.serviceName,
-    staffName: input.staffName,
-    appointmentAt,
-    appointmentLabel: input.appointmentLabel,
-    customerNote: input.customerNote?.trim() || null,
-    managerNote: null,
-    status: "pending",
-    contactChannel,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  if (input.customerUserId) {
-    const profileValues = {
-      userId: input.customerUserId,
-      preferredStaff: input.staffName,
-      notes: input.customerNote?.trim() || null,
-      lastAppointmentId: publicId,
-      lastAppointmentStatus: "pending" as const,
-      lastAppointmentAt: appointmentAt,
-      reminderStatus: "not_scheduled" as const,
+  await db.transaction(async (tx) => {
+    await tx.insert(bookings).values({
+      publicId,
+      customerUserId: input.customerUserId,
+      customerName: input.customerName,
+      salonName,
+      serviceName: input.serviceName,
+      staffName: input.staffName,
+      appointmentAt,
+      appointmentLabel: input.appointmentLabel,
+      customerNote: input.customerNote?.trim() || null,
+      managerNote: null,
+      status: "pending",
+      contactChannel,
       createdAt: now,
       updatedAt: now,
-    };
-    await db.insert(customerProfiles).values(profileValues).onConflictDoUpdate({
-      target: customerProfiles.userId,
-      set: {
+    });
+
+    if (input.customerUserId) {
+      const profileValues = {
+        userId: input.customerUserId,
         preferredStaff: input.staffName,
         notes: input.customerNote?.trim() || null,
         lastAppointmentId: publicId,
-        lastAppointmentStatus: "pending",
+        lastAppointmentStatus: "pending" as const,
         lastAppointmentAt: appointmentAt,
-        updatedAt: now,
-      },
-    });
-
-    const conversationResult = await db.insert(conversations).values({
-      userId: input.customerUserId,
-      title: input.serviceName,
-      salonName,
-      createdAt: now,
-      updatedAt: now,
-    }).returning({ id: conversations.id });
-
-    const conversationId = conversationResult[0]?.id;
-    if (conversationId) {
-      await db.insert(messages).values({
-        conversationId,
-        userId: input.customerUserId,
-        sender: "customer",
-        body: input.customerNote?.trim() || `طلب حجز جديد: ${input.serviceName} مع ${input.staffName}`,
-        read: false,
+        reminderStatus: "not_scheduled" as const,
         createdAt: now,
-      });
-    }
-  }
+        updatedAt: now,
+      };
+      await tx
+        .insert(customerProfiles)
+        .values(profileValues)
+        .onConflictDoUpdate({
+          target: customerProfiles.userId,
+          set: {
+            preferredStaff: input.staffName,
+            notes: input.customerNote?.trim() || null,
+            lastAppointmentId: publicId,
+            lastAppointmentStatus: "pending",
+            lastAppointmentAt: appointmentAt,
+            updatedAt: now,
+          },
+        });
 
-  return { publicId, status: "pending" as const, databaseAvailable: true as const };
+      const conversationResult = await tx
+        .insert(conversations)
+        .values({
+          userId: input.customerUserId,
+          title: input.serviceName,
+          salonName,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({ id: conversations.id });
+
+      const conversationId = conversationResult[0]?.id;
+      if (conversationId) {
+        await tx.insert(messages).values({
+          conversationId,
+          userId: input.customerUserId,
+          sender: "customer",
+          body:
+            input.customerNote?.trim() ||
+            `طلب حجز جديد: ${input.serviceName} مع ${input.staffName}`,
+          read: false,
+          createdAt: now,
+        });
+      }
+    }
+  });
+  return {
+    publicId,
+    status: "pending" as const,
+    databaseAvailable: true as const,
+  };
 }
 
 export async function decideBooking(input: {
@@ -206,13 +244,49 @@ export async function decideBooking(input: {
   staffName: string;
 }) {
   const db = await getDb();
-  if (db) {
-    await db.update(bookings).set({
+  if (!db)
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Database unavailable",
+    });
+  const [record] = await db
+    .update(bookings)
+    .set({
       status: input.status,
       managerNote: input.managerNote?.trim() || null,
       updatedAt: new Date(),
-    }).where(eq(bookings.publicId, input.bookingId));
-  }
+    })
+    .where(
+      and(
+        eq(bookings.publicId, input.bookingId),
+        eq(bookings.status, "pending"),
+      ),
+    )
+    .returning();
+  if (!record)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Booking missing or already reviewed",
+    });
+
+  const [profile] = record.customerUserId
+    ? await db
+        .select()
+        .from(customerProfiles)
+        .where(eq(customerProfiles.userId, record.customerUserId))
+        .limit(1)
+    : [];
+  const saved = {
+    bookingId: record.publicId,
+    customerUserId: record.customerUserId ?? undefined,
+    chatId: profile?.telegramChatId ?? undefined,
+    customerName: record.customerName,
+    salonName: record.salonName,
+    serviceName: record.serviceName,
+    appointmentAt: record.appointmentLabel,
+    appointmentAtISO: record.appointmentAt.toISOString(),
+    staffName: record.staffName,
+  };
 
   if (input.status !== "approved") {
     return {
@@ -225,8 +299,10 @@ export async function decideBooking(input: {
     };
   }
 
-  const notification = await sendBookingApprovalNotification(input);
-  const automation = await runApprovedAppointmentAutomation(input);
+  const notification = saved.chatId
+    ? await sendBookingApprovalNotification(saved)
+    : { delivered: false, skipped: true as const };
+  const automation = await runApprovedAppointmentAutomation(saved);
   return {
     bookingId: input.bookingId,
     status: "approved" as const,

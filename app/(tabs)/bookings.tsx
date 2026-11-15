@@ -1,3 +1,5 @@
+import { router } from "expo-router";
+import { salonAppointmentISO, salonDateOptions } from "@/shared/appointments";
 import { useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
@@ -15,42 +17,40 @@ const services = [
   { id: "hair", name: "تسريحة ومكياج", duration: "90 دقيقة", price: "$60" },
 ];
 const staff = ["ليان", "سارة", "نور"];
-const dates = [
-  { id: "2026-08-20", label: "اليوم · 20 أغسطس" },
-  { id: "2026-08-21", label: "غداً · 21 أغسطس" },
-  { id: "2026-08-22", label: "السبت · 22 أغسطس" },
-];
 const times = [
-  { id: "07:00:00.000Z", label: "10:00 ص" },
-  { id: "09:30:00.000Z", label: "12:30 م" },
-  { id: "13:00:00.000Z", label: "4:00 م" },
-  { id: "15:30:00.000Z", label: "6:30 م" },
+  { id: "10:00", label: "10:00 ص" },
+  { id: "12:30", label: "12:30 م" },
+  { id: "16:00", label: "4:00 م" },
+  { id: "18:30", label: "6:30 م" },
 ];
 
 export default function BookingsScreen() {
   const colors = useColors();
+  const session = trpc.auth.me.useQuery();
   const { language } = useLanguage();
   const { colorScheme } = useThemeContext();
+  const dates = salonDateOptions(new Date(), language === "ar" ? "ar-LB" : "en-GB");
   const selectedSurface = colorScheme === "dark" ? "#3A220D" : "#FFF1E5";
   const [selectedService, setSelectedService] = useState(services[0].id);
   const [selectedStaff, setSelectedStaff] = useState(staff[0]);
-  const [selectedDate, setSelectedDate] = useState(dates[1].id);
+  const [selectedDate, setSelectedDate] = useState(dates[0].id);
   const [selectedTime, setSelectedTime] = useState(times[0].id);
   const [customerNote, setCustomerNote] = useState("");
   const [status, setStatus] = useState<BookingStatus>("draft");
   const [channel, setChannel] = useState<"telegram" | "whatsapp" | null>(null);
   const [channelModalVisible, setChannelModalVisible] = useState(false);
-  const bookingsQuery = trpc.bookings.activity.useQuery(undefined, { retry: false });
+  const bookingsQuery = trpc.bookings.activity.useQuery(undefined, { enabled: !!session.data, retry: false });
   const createBooking = trpc.bookings.create.useMutation();
-  const approveBooking = trpc.bookings.approve.useMutation();
-  const selectedDateLabel = dates.find((item) => item.id === selectedDate)?.label ?? dates[1].label;
+  const selectedDateLabel = dates.find((item) => item.id === selectedDate)?.label ?? dates[0].label;
   const selectedTimeLabel = times.find((item) => item.id === selectedTime)?.label ?? times[0].label;
   const service = services.find((item) => item.id === selectedService) ?? services[0];
   const liveAppointment = bookingsQuery.data?.appointment ?? null;
-  const effectiveStatus = status !== "draft" ? status : liveAppointment?.status === "approved" ? "approved" : liveAppointment ? "pending" : "draft";
+  const effectiveStatus = status;
+  const activityStatus = liveAppointment?.status ?? (status !== "draft" ? status : null);
+  const activityStatusLabel = ({ approved: "تم اعتماد طلبك", pending: "طلبك بانتظار الموافقة", rejected: "تم رفض الطلب", cancelled: "تم إلغاء الطلب", rescheduled: "أُعيدت جدولة الطلب" } as Record<string, string>)[activityStatus ?? "pending"];
   const isPending = effectiveStatus === "pending";
   const isApproved = effectiveStatus === "approved";
-  const hasBookingRequest = effectiveStatus !== "draft";
+  const hasBookingRequest = Boolean(activityStatus);
   const isActivityLoading = bookingsQuery.isLoading;
   const hasLiveRequestError = bookingsQuery.isError || bookingsQuery.data?.databaseAvailable === false;
   const skeletonBase = colorScheme === "dark" ? "#303235" : "#E8E7E3";
@@ -65,17 +65,18 @@ export default function BookingsScreen() {
       : service.name;
 
   async function submitBooking() {
+    if (!session.data) { router.push("/login"); return; }
     setChannelModalVisible(true);
   }
 
   async function confirmChannel(nextChannel: "telegram" | "whatsapp") {
+    if (createBooking.isPending) return;
     try {
       await createBooking.mutateAsync({
-        customerName: "نورة أحمد",
         salonName: "JUST beauty",
         serviceName: service.name,
         staffName: selectedStaff,
-        appointmentAtISO: `${selectedDate}T${selectedTime}`,
+        appointmentAtISO: salonAppointmentISO(selectedDate, selectedTime),
         appointmentLabel: `${selectedDateLabel} · ${selectedTimeLabel}`,
         customerNote: customerNote.trim() || undefined,
         contactChannel: nextChannel,
@@ -90,24 +91,6 @@ export default function BookingsScreen() {
     }
   }
 
-  async function approveAndNotify() {
-    try {
-      const result = await approveBooking.mutateAsync({
-        bookingId: "BC-0148",
-        customerName: "نورة أحمد",
-        salonName: "Glow Studio",
-        serviceName: service.name,
-        appointmentAt: `${selectedDateLabel} · ${selectedTimeLabel}`,
-        appointmentAtISO: "2026-08-15T07:00:00.000Z",
-        staffName: selectedStaff,
-      });
-      setStatus("approved");
-      Alert.alert(result.notification.delivered ? "تمت الموافقة" : "تم تحديث الحالة", result.notification.delivered ? "تم إرسال إشعار Telegram وجدولة تذكير قبل 24 ساعة." : "تمت الموافقة، وسيُرسل التذكير بعد إعداد Telegram للعميلة.");
-    } catch {
-      Alert.alert("تعذر الإرسال", "تعذر الوصول إلى خدمة Telegram. حاول مرة أخرى.");
-    }
-  }
-
   return <ScreenContainer className="px-5 pt-4" edges={["top", "left", "right"]}><ScrollView contentContainerStyle={styles.content}>
     <Text style={[styles.eyebrow, { color: colors.primary }]}>BOOK A BEAUTY SERVICE</Text>
     <Text style={[styles.title, { color: colors.foreground }]}>احجزي موعدك</Text>
@@ -115,7 +98,7 @@ export default function BookingsScreen() {
 
     <View style={[styles.activityPanel, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.activityHeader}><Text style={[styles.activityTitle, { color: colors.foreground }]}>حالة حجوزاتك</Text><Text style={[styles.activityLabel, { color: colors.primary }]}>LIVE STATUS</Text></View>
-      {isActivityLoading ? <BookingActivitySkeleton base={skeletonBase} highlight={skeletonHighlight} /> : hasLiveRequestError ? <BookingRequestError title={errorCopy.title} body={errorCopy.body} retryLabel={errorCopy.retry} retryingLabel={errorCopy.retrying} isRetrying={bookingsQuery.isRefetching} onRetry={() => bookingsQuery.refetch()} colors={colors} colorScheme={colorScheme} /> : hasBookingRequest ? <View style={styles.activityBody}><View style={[styles.activityDot, { backgroundColor: isApproved ? colors.success : colors.warning }]} /><View style={styles.activityCopy}><Text style={[styles.activityStatus, { color: colors.foreground }]}>{isApproved ? "تم اعتماد طلبك" : "طلبك بانتظار الموافقة"}</Text><Text style={[styles.activityMeta, { color: colors.muted }]}>{activityMeta}</Text></View></View> : <View style={styles.emptyBooking}><View style={[styles.emptyIcon, { backgroundColor: selectedSurface }]}><Text style={[styles.emptyIconText, { color: colors.primary }]}>✦</Text></View><View style={styles.emptyBookingCopy}><Text style={[styles.emptyBookingTitle, { color: colors.foreground }]}>لا توجد حجوزات مرسلة بعد</Text><Text style={[styles.emptyBookingText, { color: colors.muted }]}>اختاري الخدمة والموعد أدناه لإرسال أول طلب إلى المركز.</Text></View></View>}
+      {isActivityLoading ? <BookingActivitySkeleton base={skeletonBase} highlight={skeletonHighlight} /> : hasLiveRequestError ? <BookingRequestError title={errorCopy.title} body={errorCopy.body} retryLabel={errorCopy.retry} retryingLabel={errorCopy.retrying} isRetrying={bookingsQuery.isRefetching} onRetry={() => bookingsQuery.refetch()} colors={colors} colorScheme={colorScheme} /> : hasBookingRequest ? <View style={styles.activityBody}><View style={[styles.activityDot, { backgroundColor: isApproved ? colors.success : colors.warning }]} /><View style={styles.activityCopy}><Text style={[styles.activityStatus, { color: colors.foreground }]}>{activityStatusLabel}</Text><Text style={[styles.activityMeta, { color: colors.muted }]}>{activityMeta}</Text></View></View> : <View style={styles.emptyBooking}><View style={[styles.emptyIcon, { backgroundColor: selectedSurface }]}><Text style={[styles.emptyIconText, { color: colors.primary }]}>✦</Text></View><View style={styles.emptyBookingCopy}><Text style={[styles.emptyBookingTitle, { color: colors.foreground }]}>لا توجد حجوزات مرسلة بعد</Text><Text style={[styles.emptyBookingText, { color: colors.muted }]}>اختاري الخدمة والموعد أدناه لإرسال أول طلب إلى المركز.</Text></View></View>}
     </View>
 
     <Section title="1 · اختاري الخدمة" colors={colors}><View style={styles.optionGrid}>{services.map((item) => <Pressable key={item.id} onPress={() => setSelectedService(item.id)} style={[styles.serviceCard, { backgroundColor: colors.surface, borderColor: selectedService === item.id ? colors.primary : colors.border }]}><Text style={[styles.optionTitle, { color: colors.foreground }]}>{item.name}</Text><Text style={[styles.optionMeta, { color: colors.muted }]}>{item.duration} · {item.price}</Text>{selectedService === item.id && <Text style={[styles.selectedMark, { color: colors.primary }]}>✓ مختارة</Text>}</Pressable>)}</View></Section>
@@ -124,8 +107,8 @@ export default function BookingsScreen() {
     <Section title="4 · اختاري الوقت" colors={colors}><View style={styles.chips}>{times.map((item) => <Pressable key={item.id} onPress={() => setSelectedTime(item.id)} style={[styles.chip, { borderColor: selectedTime === item.id ? colors.primary : colors.border, backgroundColor: selectedTime === item.id ? selectedSurface : colors.surface }]}><Text style={{ color: selectedTime === item.id ? colors.primary : colors.foreground, fontWeight: "800" }}>{item.label}</Text></Pressable>)}</View></Section>
     <Section title="5 · أضيفي ملاحظة للمركز" colors={colors}><TextInput value={customerNote} onChangeText={setCustomerNote} placeholder="مثال: أفضّل غرفة هادئة أو لدي مناسبة خاصة" placeholderTextColor={colors.muted} multiline maxLength={300} textAlign="right" style={[styles.noteInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.foreground }]} /></Section>
 
-    <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryKicker, { color: colors.primary }]}>ملخص الطلب</Text><Text style={[styles.summaryTitle, { color: colors.foreground }]}>{service.name}</Text><Text style={[styles.summaryMeta, { color: colors.muted }]}>{selectedStaff} · {selectedDate} · {selectedTime}</Text>{customerNote.trim() ? <Text style={[styles.customerNotePreview, { color: colors.muted }]}>ملاحظتك: {customerNote.trim()}</Text> : null}<Text style={[styles.pendingNote, { color: isApproved ? colors.success : colors.warning }]}>{isApproved ? "✓ تمت موافقة المركز وإشعارك عبر Telegram" : isPending ? "طلبك بانتظار موافقة إدارة المركز" : "لن يثبت الموعد إلا بعد موافقة إدارة المركز"}</Text>{status === "draft" && <Pressable onPress={submitBooking} style={[styles.primaryButton, { backgroundColor: colors.primary }]}><Text style={styles.primaryText}>إرسال طلب الحجز</Text></Pressable>}{isPending && <View style={styles.pendingActions}><View style={[styles.pendingBadge, { borderColor: colors.warning }]}><Text style={{ color: colors.warning, fontWeight: "900" }}>قيد الانتظار</Text></View><Pressable disabled={approveBooking.isPending} onPress={approveAndNotify} style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: approveBooking.isPending ? 0.6 : 1 }]}><Text style={styles.primaryText}>{approveBooking.isPending ? "جارٍ التأكيد..." : "محاكاة موافقة المركز"}</Text></Pressable></View>}{isApproved && <Pressable onPress={() => setStatus("draft")} style={[styles.outlineButton, { borderColor: colors.border }]}><Text style={{ color: colors.foreground, fontWeight: "800" }}>إنشاء طلب آخر</Text></Pressable>}</View>
-    <Modal visible={channelModalVisible} transparent animationType="fade" onRequestClose={() => setChannelModalVisible(false)}><View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: colors.background }]}><Text style={[styles.modalTitle, { color: colors.foreground }]}>اختاري طريقة التواصل</Text><Text style={[styles.modalBody, { color: colors.muted }]}>سنستخدم القناة المختارة لإشعارك بالموافقة والتذكير قبل الموعد.</Text><Pressable onPress={() => confirmChannel("telegram")} style={[styles.channelButton, { backgroundColor: colors.primary }]}><Text style={styles.channelButtonText}>Telegram · متاح الآن</Text></Pressable><Pressable onPress={() => confirmChannel("whatsapp")} style={[styles.channelButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}><Text style={[styles.channelButtonText, { color: colors.foreground }]}>WhatsApp · خيار إضافي</Text></Pressable><Pressable onPress={() => setChannelModalVisible(false)} style={styles.cancelButton}><Text style={[styles.cancelText, { color: colors.muted }]}>إلغاء</Text></Pressable></View></View></Modal>
+    <View style={[styles.summary, { backgroundColor: colors.surface, borderColor: colors.border }]}><Text style={[styles.summaryKicker, { color: colors.primary }]}>ملخص الطلب</Text><Text style={[styles.summaryTitle, { color: colors.foreground }]}>{service.name}</Text><Text style={[styles.summaryMeta, { color: colors.muted }]}>{selectedStaff} · {selectedDate} · {selectedTime}</Text>{customerNote.trim() ? <Text style={[styles.customerNotePreview, { color: colors.muted }]}>ملاحظتك: {customerNote.trim()}</Text> : null}<Text style={[styles.pendingNote, { color: isApproved ? colors.success : colors.warning }]}>{isApproved ? "✓ تمت موافقة المركز على الموعد" : isPending ? "طلبك بانتظار موافقة إدارة المركز" : "لن يثبت الموعد إلا بعد موافقة إدارة المركز"}</Text>{status === "draft" && <Pressable onPress={submitBooking} style={[styles.primaryButton, { backgroundColor: colors.primary }]}><Text style={styles.primaryText}>إرسال طلب الحجز</Text></Pressable>}{isPending && <View style={styles.pendingActions}><View style={[styles.pendingBadge, { borderColor: colors.warning }]}><Text style={{ color: colors.warning, fontWeight: "900" }}>قيد الانتظار</Text></View></View>}{isApproved && <Pressable onPress={() => setStatus("draft")} style={[styles.outlineButton, { borderColor: colors.border }]}><Text style={{ color: colors.foreground, fontWeight: "800" }}>إنشاء طلب آخر</Text></Pressable>}</View>
+    <Modal visible={channelModalVisible} transparent animationType="fade" onRequestClose={() => setChannelModalVisible(false)}><View style={styles.modalBackdrop}><View style={[styles.modalCard, { backgroundColor: colors.background }]}><Text style={[styles.modalTitle, { color: colors.foreground }]}>اختاري طريقة التواصل</Text><Text style={[styles.modalBody, { color: colors.muted }]}>سنستخدم القناة المختارة لإشعارك بالموافقة والتذكير قبل الموعد.</Text><Pressable disabled={createBooking.isPending} onPress={() => confirmChannel("telegram")} style={[styles.channelButton, { backgroundColor: colors.primary }]}><Text style={styles.channelButtonText}>Telegram · حسب إعداد المركز</Text></Pressable><Pressable disabled={createBooking.isPending} onPress={() => confirmChannel("whatsapp")} style={[styles.channelButton, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}><Text style={[styles.channelButtonText, { color: colors.foreground }]}>WhatsApp · خيار إضافي</Text></Pressable><Pressable onPress={() => setChannelModalVisible(false)} style={styles.cancelButton}><Text style={[styles.cancelText, { color: colors.muted }]}>إلغاء</Text></Pressable></View></View></Modal>
   </ScrollView></ScreenContainer>;
 }
 
