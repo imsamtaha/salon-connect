@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -55,6 +55,28 @@ export const bookings = sqliteTable("bookings", {
   updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
+export const automationJobs = sqliteTable("automation_jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  dedupeKey: text("dedupeKey").notNull().unique(),
+  type: text("type", { enum: ["booking_approval", "booking_reminder"] }).notNull(),
+  bookingId: text("bookingId").notNull(),
+  payload: text("payload").notNull(),
+  runAt: integer("runAt", { mode: "timestamp" }).notNull(),
+  status: text("status", { enum: ["scheduled", "processing", "sent", "failed", "cancelled"] })
+    .default("scheduled")
+    .notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  maxAttempts: integer("maxAttempts").default(5).notNull(),
+  lastError: text("lastError"),
+  lastAttemptAt: integer("lastAttemptAt", { mode: "timestamp" }),
+  completedAt: integer("completedAt", { mode: "timestamp" }),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+}, (table) => [
+  index("automation_jobs_due_idx").on(table.status, table.runAt),
+  index("automation_jobs_booking_idx").on(table.bookingId, table.type, table.status),
+]);
+
 export const conversations = sqliteTable("conversations", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("userId").notNull(),
@@ -78,5 +100,6 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type CustomerProfile = typeof customerProfiles.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
+export type AutomationJob = typeof automationJobs.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;

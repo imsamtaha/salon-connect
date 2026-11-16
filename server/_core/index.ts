@@ -7,8 +7,10 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
+import { isValidAutomationToken } from "./scheduled-auth";
+import { ENV } from "./env";
 import { getDb } from "../db";
-import { processDueTelegramReminders } from "../reminders";
+import { ensureReminderHeartbeat, processDueTelegramReminders, startAutomationWorker } from "../reminders";
 import { seedIfEmpty } from "../seed";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -67,6 +69,15 @@ async function startServer() {
   });
 
   app.post("/api/scheduled/telegram-reminders", async (_req, res) => {
+    if (!ENV.automationWebhookSecret) {
+      res.status(503).json({ ok: false, error: "automation_secret_not_configured" });
+      return;
+    }
+    if (!isValidAutomationToken(ENV.automationWebhookSecret, _req.body?.token)) {
+      res.status(401).json({ ok: false, error: "unauthorized" });
+      return;
+    }
+
     try {
       const result = await processDueTelegramReminders();
       res.json({ ok: true, ...result });
@@ -97,6 +108,13 @@ async function startServer() {
     console.log(`[database] ready (${seed.reason})`);
   } else {
     console.warn("[database] unavailable");
+  }
+
+  startAutomationWorker();
+  if (ENV.automationWebhookSecret) {
+    void ensureReminderHeartbeat().catch((error) => {
+      console.warn("[automation-worker] heartbeat registration unavailable", error);
+    });
   }
 
   server.listen(port, () => {
