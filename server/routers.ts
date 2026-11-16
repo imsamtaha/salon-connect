@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { adminProcedure, publicProcedure, router } from "./_core/trpc";
 import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
 import { createBookingRequest, decideBooking, getLatestBooking, listBookings } from "./bookings";
 import { getConversationFeed } from "./customer-activity";
@@ -13,14 +13,6 @@ import { getReminderState } from "./reminders";
 
 const bookingDecisionInput = z.object({
   bookingId: z.string().min(1),
-  customerUserId: z.number().int().positive().optional(),
-  chatId: z.string().optional(),
-  customerName: z.string().min(1),
-  salonName: z.string().min(1),
-  serviceName: z.string().min(1),
-  appointmentAt: z.string().min(1),
-  appointmentAtISO: z.string().datetime(),
-  staffName: z.string().min(1),
   managerNote: z.string().optional(),
 });
 
@@ -74,11 +66,11 @@ export const appRouter = router({
     }),
   }),
   dashboard: router({
-    overview: publicProcedure.query(() => getManagerDashboardSnapshot()),
+    overview: adminProcedure.query(() => getManagerDashboardSnapshot()),
   }),
   bookings: router({
     activity: publicProcedure.query(({ ctx }) => getLatestBooking(ctx.user?.id)),
-    queue: publicProcedure.query(() => listBookings()),
+    queue: adminProcedure.query(() => listBookings()),
     create: publicProcedure
       .input(z.object({
         customerName: z.string().min(1).optional(),
@@ -95,13 +87,13 @@ export const appRouter = router({
         customerUserId: ctx.user?.id,
         customerName: ctx.user?.name?.trim() || input.customerName || "عميلة",
       })),
-    approve: publicProcedure
+    approve: adminProcedure
       .input(bookingDecisionInput)
       .mutation(({ input }) => decideBooking({ ...input, status: "approved" })),
-    reject: publicProcedure
+    reject: adminProcedure
       .input(bookingDecisionInput)
       .mutation(({ input }) => decideBooking({ ...input, status: "rejected" })),
-    reminderState: publicProcedure.query(() => getReminderState()),
+    reminderState: adminProcedure.query(() => getReminderState()),
   }),
   conversations: router({
     feed: publicProcedure.query(({ ctx }) => getConversationFeed(ctx.user?.id, ctx.user?.role)),

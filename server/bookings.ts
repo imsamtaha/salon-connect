@@ -1,9 +1,8 @@
 import { desc, eq } from "drizzle-orm";
 
 import { bookings, conversations, customerProfiles, messages } from "../drizzle/schema";
-import { runApprovedAppointmentAutomation } from "./automation";
+import { cancelPendingBookingAutomations, runApprovedAppointmentAutomation } from "./automation";
 import { getDb } from "./db";
-import { sendBookingApprovalNotification } from "./telegram";
 
 export type BookingStatus = "pending" | "approved" | "rejected" | "rescheduled" | "cancelled";
 export type ContactChannel = "telegram" | "whatsapp" | "direct";
@@ -196,25 +195,35 @@ export async function decideBooking(input: {
   bookingId: string;
   status: "approved" | "rejected";
   managerNote?: string;
-  customerUserId?: number;
-  chatId?: string;
-  customerName: string;
-  salonName: string;
-  serviceName: string;
-  appointmentAt: string;
-  appointmentAtISO: string;
-  staffName: string;
 }) {
   const db = await getDb();
-  if (db) {
-    await db.update(bookings).set({
-      status: input.status,
-      managerNote: input.managerNote?.trim() || null,
-      updatedAt: new Date(),
-    }).where(eq(bookings.publicId, input.bookingId));
-  }
+  if (!db) throw new Error("database_unavailable");
+
+  const [booking] = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.publicId, input.bookingId))
+    .limit(1);
+  if (!booking) throw new Error("booking_not_found");
+
+  const now = new Date();
 
   if (input.status !== "approved") {
+    await db.transaction(async (transaction) => {
+      await transaction.update(bookings).set({
+        status: input.status,
+        managerNote: input.managerNote?.trim() || null,
+        updatedAt: now,
+      }).where(eq(bookings.publicId, input.bookingId));
+      if (booking.customerUserId) {
+        await transaction.update(customerProfiles).set({
+          lastAppointmentStatus: "rejected",
+          reminderStatus: "cancelled",
+          updatedAt: now,
+        }).where(eq(customerProfiles.userId, booking.customerUserId));
+      }
+      await cancelPendingBookingAutomations(input.bookingId, transaction);
+    });
     return {
       bookingId: input.bookingId,
       status: input.status,
@@ -225,12 +234,34 @@ export async function decideBooking(input: {
     };
   }
 
-  const notification = await sendBookingApprovalNotification(input);
-  const automation = await runApprovedAppointmentAutomation(input);
+  const [customerProfile] = booking.customerUserId
+    ? await db.select({ chatId: customerProfiles.telegramChatId })
+      .from(customerProfiles)
+      .where(eq(customerProfiles.userId, booking.customerUserId))
+      .limit(1)
+    : [];
+
+  const automation = await runApprovedAppointmentAutomation({
+    bookingId: booking.publicId,
+    customerUserId: booking.customerUserId ?? undefined,
+    chatId: customerProfile?.chatId ?? undefined,
+    customerName: booking.customerName,
+    salonName: booking.salonName,
+    serviceName: booking.serviceName,
+    appointmentAt: booking.appointmentLabel,
+    appointmentAtISO: booking.appointmentAt.toISOString(),
+    staffName: booking.staffName,
+  }, async (transaction) => {
+    await transaction.update(bookings).set({
+      status: "approved",
+      managerNote: input.managerNote?.trim() || null,
+      updatedAt: now,
+    }).where(eq(bookings.publicId, input.bookingId));
+  });
   return {
     bookingId: input.bookingId,
     status: "approved" as const,
-    notification,
+    notification: automation.notification,
     reminderScheduler: automation.reminderScheduler,
     customerRecordUpdated: automation.customerRecordUpdated,
     reminderAtISO: automation.snapshot.reminderAtISO,

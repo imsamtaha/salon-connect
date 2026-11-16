@@ -37,12 +37,6 @@ export default function AdminScreen() {
     try {
       const result = await approveBooking.mutateAsync({
         bookingId: request.id,
-        customerName: request.customer,
-        salonName: "JUST beauty",
-        serviceName: request.service,
-        appointmentAt: request.date,
-        appointmentAtISO: request.appointmentAtISO ?? "2026-08-21T07:00:00.000Z",
-        staffName: request.staff,
         managerNote: request.managerNote,
       });
       await queueQuery.refetch();
@@ -56,12 +50,6 @@ export default function AdminScreen() {
     try {
       await rejectBooking.mutateAsync({
         bookingId: request.id,
-        customerName: request.customer,
-        salonName: "JUST beauty",
-        serviceName: request.service,
-        appointmentAt: request.date,
-        appointmentAtISO: request.appointmentAtISO ?? "2026-08-21T07:00:00.000Z",
-        staffName: request.staff,
         managerNote: request.managerNote,
       });
       await queueQuery.refetch();

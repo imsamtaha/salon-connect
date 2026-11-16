@@ -43,6 +43,24 @@ export const SQLITE_SCHEMA_STATEMENTS = [
     createdAt INTEGER NOT NULL,
     updatedAt INTEGER NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS automation_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dedupeKey TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL,
+    bookingId TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    runAt INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'scheduled',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    maxAttempts INTEGER NOT NULL DEFAULT 5,
+    lastError TEXT,
+    lastAttemptAt INTEGER,
+    completedAt INTEGER,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS automation_jobs_due_idx ON automation_jobs (status, runAt)`,
+  `CREATE INDEX IF NOT EXISTS automation_jobs_booking_idx ON automation_jobs (bookingId, type, status)`,
   `CREATE TABLE IF NOT EXISTS conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     userId INTEGER NOT NULL,
