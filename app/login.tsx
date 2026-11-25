@@ -4,6 +4,7 @@ import { router } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useAuth } from "@/hooks/use-auth";
+import { name as APP_NAME } from "@/constants/branding.json";
 import { useColors } from "@/hooks/use-colors";
 import { useLanguage } from "@/lib/i18n";
 import { trpc } from "@/lib/trpc";
@@ -54,9 +55,9 @@ export default function LoginScreen() {
     <ScreenContainer className="px-6 pt-8" edges={["top", "left", "right", "bottom"]}>
       <View style={styles.content}>
         <View style={[styles.mark, { backgroundColor: colors.primary }]}>
-          <Text style={styles.markText}>BC</Text>
+          <Text style={styles.markText}>م</Text>
         </View>
-        <Text style={[styles.eyebrow, { color: colors.primary }]}>BEAUTY CONNECT</Text>
+        <Text style={[styles.eyebrow, { color: colors.primary }]}>{APP_NAME}</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>
           {mode === "register"
             ? (isArabic ? "أنشئي حساب العميلة" : "Create a customer account")

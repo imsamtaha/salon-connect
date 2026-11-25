@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { name as APP_NAME } from "@/constants/branding.json";
 
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
@@ -49,7 +50,7 @@ export default function HelpScreen() {
         </Pressable>
         <Text style={[styles.eyebrow, { color: colors.primary }]}>CENTER GUIDE</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>{isArabic ? "دليل المديرة" : "Manager guide"}</Text>
-        <Text style={[styles.subtitle, { color: colors.muted }]}>{isArabic ? "شرح عملي لكل خطوة داخل Beauty Connect." : "A practical guide to every step in Beauty Connect."}</Text>
+        <Text style={[styles.subtitle, { color: colors.muted }]}>{isArabic ? `شرح عملي لكل خطوة داخل ${APP_NAME}.` : `A practical guide to every step in ${APP_NAME}.`}</Text>
         {sections.map((section, index) => (
           <View key={section.title} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={[styles.number, { backgroundColor: colors.primary }]}><Text style={styles.numberText}>{index + 1}</Text></View>
