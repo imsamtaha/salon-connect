@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { RaisedButton } from "@/components/raised-button";
 import { router } from "expo-router";
 import { name as APP_NAME } from "@/constants/branding.json";
 
@@ -45,9 +46,9 @@ export default function HelpScreen() {
   return (
     <ScreenContainer className="px-5 pt-4" edges={["top", "left", "right", "bottom"]}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <RaisedButton onPress={() => router.back()} style={styles.backButton}>
           <Text style={[styles.backText, { color: colors.primary }]}>{isArabic ? "رجوع" : "Back"}</Text>
-        </Pressable>
+        </RaisedButton>
         <Text style={[styles.eyebrow, { color: colors.primary }]}>CENTER GUIDE</Text>
         <Text style={[styles.title, { color: colors.foreground }]}>{isArabic ? "دليل المديرة" : "Manager guide"}</Text>
         <Text style={[styles.subtitle, { color: colors.muted }]}>{isArabic ? `شرح عملي لكل خطوة داخل ${APP_NAME}.` : `A practical guide to every step in ${APP_NAME}.`}</Text>
@@ -76,7 +77,7 @@ function translateSection(index: number) {
 
 const styles = StyleSheet.create({
   content: { gap: 14, paddingBottom: 40 },
-  backButton: { alignSelf: "flex-start", paddingVertical: 8 },
+  backButton: { alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 8 },
   backText: { fontSize: 13, fontWeight: "900" },
   eyebrow: { fontSize: 10, letterSpacing: 1.4, fontWeight: "900", textAlign: "right" },
   title: { fontSize: 31, fontWeight: "900", textAlign: "right" },
