@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { RaisedButton } from "@/components/raised-button";
 import { router } from "expo-router";
 
 import { ScreenContainer } from "@/components/screen-container";
@@ -68,25 +69,25 @@ export default function LoginScreen() {
         ) : null}
         <TextInput autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} placeholder={isArabic ? "البريد الإلكتروني" : "Email"} placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]} />
         <TextInput secureTextEntry value={password} onChangeText={setPassword} placeholder={isArabic ? "كلمة المرور" : "Password"} placeholderTextColor={colors.muted} style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.surface }]} />
-        <Pressable onPress={handleSubmit} disabled={busy} style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: busy ? 0.7 : 1 }]}>
+        <RaisedButton tone="primary" onPress={handleSubmit} disabled={busy} style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: busy ? 0.7 : 1 }]}>
           {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{mode === "register" ? (isArabic ? "إنشاء الحساب" : "Create account") : (isArabic ? "تسجيل الدخول" : "Sign in")}</Text>}
-        </Pressable>
+        </RaisedButton>
         <Pressable onPress={() => setMode(mode === "login" ? "register" : "login")}>
           <Text style={[styles.switchText, { color: colors.primary }]}>
             {mode === "login" ? (isArabic ? "ليس لديك حساب؟ أنشئي حساباً" : "Need an account? Register") : (isArabic ? "لديك حساب؟ سجّلي الدخول" : "Already registered? Sign in")}
           </Text>
         </Pressable>
         <View style={styles.demoRow}>
-          <Pressable onPress={() => handleDemo("nora@justbeauty.local")} style={[styles.demoButton, { borderColor: colors.border }]}>
+          <RaisedButton onPress={() => handleDemo("nora@justbeauty.local")} style={[styles.demoButton, { borderColor: colors.border }]}>
             <Text style={[styles.demoText, { color: colors.foreground }]}>{isArabic ? "تجربة العميلة" : "Demo customer"}</Text>
-          </Pressable>
-          <Pressable onPress={() => handleDemo("nadine@justbeauty.local")} style={[styles.demoButton, { borderColor: colors.border }]}>
+          </RaisedButton>
+          <RaisedButton onPress={() => handleDemo("nadine@justbeauty.local")} style={[styles.demoButton, { borderColor: colors.border }]}>
             <Text style={[styles.demoText, { color: colors.foreground }]}>{isArabic ? "تجربة المديرة" : "Demo manager"}</Text>
-          </Pressable>
+          </RaisedButton>
         </View>
-        <Pressable onPress={() => router.back()} style={styles.secondaryButton}>
+        <RaisedButton onPress={() => router.back()} style={styles.secondaryButton}>
           <Text style={[styles.secondaryButtonText, { color: colors.foreground }]}>{isArabic ? "العودة" : "Go back"}</Text>
-        </Pressable>
+        </RaisedButton>
       </View>
     </ScreenContainer>
   );
